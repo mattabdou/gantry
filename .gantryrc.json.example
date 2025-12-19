@@ -1,0 +1,28 @@
+{
+  "autoUpdate": true,
+  "otel": {
+    "endpoint": "https://your-otel-collector.example.com/otlp",
+    "headers": "Authorization=Bearer YOUR_TOKEN_HERE",
+    "protocol": "http/protobuf",
+    "metricsExporter": "otlp",
+    "logsExporter": "otlp",
+    "metricExportInterval": 60000,
+    "logsExportInterval": 5000,
+    "logUserPrompts": false,
+    "includeSessionId": true,
+    "includeVersion": false,
+    "includeAccountUuid": true
+  },
+  "bedrock": {
+    "enabled": true,
+    "awsProfile": "YOUR_AWS_PROFILE",
+    "awsRegion": "us-east-2",
+    "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+    "maxOutputTokens": 8192,
+    "maxThinkingTokens": 1024
+  },
+  "powerline": {
+    "theme": "dark",
+    "style": "powerline"
+  }
+}
