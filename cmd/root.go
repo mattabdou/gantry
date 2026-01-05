@@ -92,12 +92,6 @@ func runGantry(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Auto-update Claude Code if enabled (default: true)
-	if globalConfig.AutoUpdate {
-		updateResult := launcher.UpdateClaudeCode()
-		fmt.Println(updateResult.Message)
-	}
-
 	// Get current working directory
 	workingPath, err := os.Getwd()
 	if err != nil {

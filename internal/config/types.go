@@ -2,10 +2,9 @@ package config
 
 // GlobalConfig represents the ~/.gantryrc.json configuration file
 type GlobalConfig struct {
-	AutoUpdate bool             `json:"autoUpdate"`
-	OTEL       OTELConfig       `json:"otel"`
-	Bedrock    *BedrockConfig   `json:"bedrock,omitempty"`
-	Powerline  *PowerlineConfig `json:"powerline,omitempty"`
+	OTEL      OTELConfig       `json:"otel"`
+	Bedrock   *BedrockConfig   `json:"bedrock,omitempty"`
+	Powerline *PowerlineConfig `json:"powerline,omitempty"`
 }
 
 // OTELConfig contains OpenTelemetry configuration

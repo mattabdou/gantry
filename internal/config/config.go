@@ -135,7 +135,6 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 	falseVal := false
 
 	return &GlobalConfig{
-		AutoUpdate: true,
 		OTEL: OTELConfig{
 			Endpoint:             "https://your-otel-collector.example.com/otlp",
 			Headers:              "Authorization=Bearer YOUR_TOKEN_HERE",
@@ -268,7 +267,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 
 	// Type coercion based on known types
 	booleanKeys := map[string]bool{
-		"autoUpdate": true, "logUserPrompts": true, "includeSessionId": true,
+		"logUserPrompts": true, "includeSessionId": true,
 		"includeVersion": true, "includeAccountUuid": true, "enabled": true,
 	}
 	numberKeys := map[string]bool{

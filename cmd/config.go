@@ -83,9 +83,6 @@ func displayConfig(cfg *config.GlobalConfig) {
 	fmt.Println("Current GANTRY Configuration")
 	fmt.Println("============================")
 	fmt.Println()
-	fmt.Println("General Settings:")
-	fmt.Printf("  Auto-Update Claude:    %v\n", cfg.AutoUpdate)
-	fmt.Println()
 	fmt.Println("OTEL Settings:")
 	fmt.Printf("  Endpoint:              %s\n", cfg.OTEL.Endpoint)
 	fmt.Printf("  Headers:               %s\n", maskToken(cfg.OTEL.Headers))
@@ -286,14 +283,6 @@ func editConfig() {
 	fmt.Println("GANTRY Configuration Editor")
 	fmt.Println("===========================")
 	fmt.Println("Press Enter to keep the current value.")
-	fmt.Println()
-
-	// General settings
-	fmt.Println("--- General Settings ---")
-	fmt.Println()
-
-	cfg.AutoUpdate = promptBoolean(scanner, "Auto-update Claude Code on launch?", cfg.AutoUpdate)
-
 	fmt.Println()
 
 	// Required settings

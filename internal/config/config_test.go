@@ -80,10 +80,6 @@ func TestGetDefaultGlobalConfigTemplate(t *testing.T) {
 		t.Fatal("GetDefaultGlobalConfigTemplate() returned nil")
 	}
 
-	if !template.AutoUpdate {
-		t.Error("AutoUpdate should be true by default")
-	}
-
 	if template.OTEL.Endpoint == "" {
 		t.Error("OTEL.Endpoint should not be empty")
 	}
@@ -160,7 +156,6 @@ func TestFindProjectConfig(t *testing.T) {
 func TestGetConfigValue(t *testing.T) {
 	trueVal := true
 	config := &GlobalConfig{
-		AutoUpdate: true,
 		OTEL: OTELConfig{
 			Endpoint:         "https://test.example.com",
 			IncludeSessionID: &trueVal,
@@ -172,7 +167,6 @@ func TestGetConfigValue(t *testing.T) {
 		want    interface{}
 		wantErr bool
 	}{
-		{"autoUpdate", true, false},
 		{"otel.endpoint", "https://test.example.com", false},
 		{"nonexistent", nil, true},
 		{"otel.nonexistent", nil, true},
@@ -194,7 +188,6 @@ func TestGetConfigValue(t *testing.T) {
 
 func TestSetConfigValue(t *testing.T) {
 	config := &GlobalConfig{
-		AutoUpdate: true,
 		OTEL: OTELConfig{
 			Endpoint: "https://old.example.com",
 		},
@@ -211,13 +204,13 @@ func TestSetConfigValue(t *testing.T) {
 	}
 
 	// Test setting boolean value
-	err = SetConfigValue(config, "autoUpdate", "false")
+	err = SetConfigValue(config, "otel.logUserPrompts", "true")
 	if err != nil {
 		t.Fatalf("SetConfigValue() error = %v", err)
 	}
 
-	if config.AutoUpdate != false {
-		t.Errorf("AutoUpdate = %v, want %v", config.AutoUpdate, false)
+	if config.OTEL.LogUserPrompts != true {
+		t.Errorf("LogUserPrompts = %v, want %v", config.OTEL.LogUserPrompts, true)
 	}
 
 	// Test setting number value

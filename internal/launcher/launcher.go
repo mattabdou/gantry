@@ -1,7 +1,6 @@
 package launcher
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -10,12 +9,6 @@ import (
 
 	"github.com/mattabdou/gantry/internal/config"
 )
-
-// UpdateResult contains the result of updating Claude Code
-type UpdateResult struct {
-	Success bool
-	Message string
-}
 
 // IsWindows returns true if running on Windows
 func IsWindows() bool {
@@ -28,36 +21,6 @@ func GetClaudeCommand() string {
 		return "claude.cmd"
 	}
 	return "claude"
-}
-
-// GetNpmCommand returns the appropriate npm command for the current OS
-func GetNpmCommand() string {
-	if IsWindows() {
-		return "npm.cmd"
-	}
-	return "npm"
-}
-
-// UpdateClaudeCode updates Claude Code to the latest version
-func UpdateClaudeCode() *UpdateResult {
-	fmt.Println("Checking for Claude Code updates...")
-
-	npmCmd := GetNpmCommand()
-	cmd := exec.Command(npmCmd, "update", "-g", "@anthropic-ai/claude-code")
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	if err := cmd.Run(); err != nil {
-		return &UpdateResult{
-			Success: false,
-			Message: fmt.Sprintf("Update check failed: %v", err),
-		}
-	}
-
-	return &UpdateResult{
-		Success: true,
-		Message: "Claude Code is up to date",
-	}
 }
 
 // GetGitBranch returns the current git branch name or empty string if not in a git repo
@@ -78,31 +41,31 @@ func BuildResourceAttributes(username, workingPath string, projectConfig *config
 	var attributes []string
 
 	// Always include username and working path
-	attributes = append(attributes, fmt.Sprintf("gantry.username=%s", username))
-	attributes = append(attributes, fmt.Sprintf("gantry.working_path=%s", workingPath))
+	attributes = append(attributes, "gantry.username="+username)
+	attributes = append(attributes, "gantry.working_path="+workingPath)
 
 	// Project config attributes
 	projectName := "Unknown"
 	if projectConfig != nil && projectConfig.Config.ProjectName != "" {
 		projectName = projectConfig.Config.ProjectName
 	}
-	attributes = append(attributes, fmt.Sprintf("gantry.project_name=%s", projectName))
+	attributes = append(attributes, "gantry.project_name="+projectName)
 
 	if projectConfig != nil {
 		if projectConfig.Config.Repository != "" {
-			attributes = append(attributes, fmt.Sprintf("gantry.repository=%s", projectConfig.Config.Repository))
+			attributes = append(attributes, "gantry.repository="+projectConfig.Config.Repository)
 		}
 		if projectConfig.Config.Team != "" {
-			attributes = append(attributes, fmt.Sprintf("gantry.team=%s", projectConfig.Config.Team))
+			attributes = append(attributes, "gantry.team="+projectConfig.Config.Team)
 		}
 		if projectConfig.Config.CostCenter != "" {
-			attributes = append(attributes, fmt.Sprintf("gantry.cost_center=%s", projectConfig.Config.CostCenter))
+			attributes = append(attributes, "gantry.cost_center="+projectConfig.Config.CostCenter)
 		}
 	}
 
 	// Git branch if available
 	if gitBranch != "" {
-		attributes = append(attributes, fmt.Sprintf("gantry.git_branch=%s", gitBranch))
+		attributes = append(attributes, "gantry.git_branch="+gitBranch)
 	}
 
 	return strings.Join(attributes, ",")
@@ -114,7 +77,7 @@ func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes stri
 
 	// Helper to add environment variable
 	addEnv := func(key, value string) {
-		env = append(env, fmt.Sprintf("%s=%s", key, value))
+		env = append(env, key+"="+value)
 	}
 
 	otel := globalConfig.OTEL

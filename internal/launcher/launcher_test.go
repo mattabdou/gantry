@@ -32,20 +32,6 @@ func TestGetClaudeCommand(t *testing.T) {
 	}
 }
 
-func TestGetNpmCommand(t *testing.T) {
-	got := GetNpmCommand()
-
-	if IsWindows() {
-		if got != "npm.cmd" {
-			t.Errorf("GetNpmCommand() = %v, want npm.cmd", got)
-		}
-	} else {
-		if got != "npm" {
-			t.Errorf("GetNpmCommand() = %v, want npm", got)
-		}
-	}
-}
-
 func TestBuildResourceAttributes(t *testing.T) {
 	username := "testuser"
 	workingPath := "/path/to/project"
@@ -130,7 +116,6 @@ func TestBuildEnvironment(t *testing.T) {
 	falseVal := false
 
 	globalConfig := &config.GlobalConfig{
-		AutoUpdate: true,
 		OTEL: config.OTELConfig{
 			Endpoint:             "https://collector.example.com/otlp",
 			Headers:              "Authorization=Bearer token123",
