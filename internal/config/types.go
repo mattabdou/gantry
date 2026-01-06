@@ -2,9 +2,16 @@ package config
 
 // GlobalConfig represents the ~/.gantryrc.json configuration file
 type GlobalConfig struct {
+	Gantry    *GantryConfig    `json:"gantry,omitempty"`
 	OTEL      OTELConfig       `json:"otel"`
 	Bedrock   *BedrockConfig   `json:"bedrock,omitempty"`
 	Powerline *PowerlineConfig `json:"powerline,omitempty"`
+}
+
+// GantryConfig contains GANTRY-specific configuration
+type GantryConfig struct {
+	Username        string `json:"username"`
+	EnablePowerline *bool  `json:"enablePowerline,omitempty"`
 }
 
 // OTELConfig contains OpenTelemetry configuration

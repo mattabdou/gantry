@@ -152,3 +152,50 @@ func UpdatePowerlineSettings(powerlineConfig *config.PowerlineConfig) *UpdateRes
 		Message: fmt.Sprintf("Updated powerline: theme=%s, style=%s", theme, style),
 	}
 }
+
+// RemovePowerlineSettings removes the statusLine configuration from Claude Code settings
+func RemovePowerlineSettings() *UpdateResult {
+	settingsPath, err := GetClaudeSettingsPath()
+	if err != nil {
+		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to get settings path: %v", err)}
+	}
+
+	// Read existing settings
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		// If file doesn't exist, nothing to remove
+		return &UpdateResult{Updated: false, Message: "No settings file to update"}
+	}
+
+	var settings config.ClaudeSettings
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to parse settings: %v", err)}
+	}
+
+	// Check if statusLine exists and contains claude-powerline
+	if settings.StatusLine == nil {
+		return &UpdateResult{Updated: false, Message: "Powerline not configured"}
+	}
+
+	if !strings.Contains(settings.StatusLine.Command, "claude-powerline") {
+		return &UpdateResult{Updated: false, Message: "Powerline not managed by GANTRY"}
+	}
+
+	// Remove statusLine configuration
+	settings.StatusLine = nil
+
+	// Write back to file
+	output, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to marshal settings: %v", err)}
+	}
+
+	if err := os.WriteFile(settingsPath, output, 0644); err != nil {
+		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to write settings: %v", err)}
+	}
+
+	return &UpdateResult{
+		Updated: true,
+		Message: "Removed powerline configuration (disabled)",
+	}
+}

@@ -30,6 +30,9 @@ func TestValidateGlobalConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username: "john.doe",
+				},
 				OTEL: OTELConfig{
 					Endpoint: "https://collector.example.com/otlp",
 				},
@@ -37,8 +40,44 @@ func TestValidateGlobalConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "missing gantry section",
+			config: &GlobalConfig{
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty username",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username: "",
+				},
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "placeholder username YOUR_",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username: "YOUR_USERNAME_HERE",
+				},
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing endpoint",
 			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username: "john.doe",
+				},
 				OTEL: OTELConfig{},
 			},
 			wantErr: true,
@@ -46,6 +85,9 @@ func TestValidateGlobalConfig(t *testing.T) {
 		{
 			name: "placeholder endpoint YOUR_",
 			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username: "john.doe",
+				},
 				OTEL: OTELConfig{
 					Endpoint: "https://YOUR_ENDPOINT.example.com",
 				},
@@ -55,6 +97,9 @@ func TestValidateGlobalConfig(t *testing.T) {
 		{
 			name: "placeholder endpoint your-",
 			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username: "john.doe",
+				},
 				OTEL: OTELConfig{
 					Endpoint: "https://your-endpoint.example.com",
 				},
@@ -78,6 +123,18 @@ func TestGetDefaultGlobalConfigTemplate(t *testing.T) {
 
 	if template == nil {
 		t.Fatal("GetDefaultGlobalConfigTemplate() returned nil")
+	}
+
+	if template.Gantry == nil {
+		t.Error("Gantry should not be nil")
+	}
+
+	if template.Gantry.Username == "" {
+		t.Error("Gantry.Username should not be empty")
+	}
+
+	if template.Gantry.EnablePowerline == nil {
+		t.Error("Gantry.EnablePowerline should not be nil")
 	}
 
 	if template.OTEL.Endpoint == "" {

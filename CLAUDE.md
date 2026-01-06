@@ -46,13 +46,32 @@ make clean          # Remove build artifacts
 
 ## Key Configuration Files
 
-- `~/.gantryrc.json` - Global config (OTEL endpoint, headers, Bedrock settings, powerline)
+- `~/.gantryrc.json` - Global config (gantry settings, OTEL endpoint, headers, Bedrock settings, powerline)
 - `.gantry.json` - Per-project config (projectName, repository, team, costCenter)
 - `~/.claude/settings.json` - Claude Code settings (modified by GANTRY for powerline)
 
+## Configuration Sections in ~/.gantryrc.json
+
+**gantry section:**
+- `username` - Username for telemetry attribution (required)
+- `enablePowerline` - Whether to configure powerline status bar (default: true)
+
+**otel section:**
+- `endpoint` - OTEL collector endpoint URL (required)
+- `headers` - Authentication headers
+- Other OTEL configuration options
+
+**bedrock section:**
+- AWS Bedrock API configuration (optional)
+
+**powerline section:**
+- Theme and style settings for claude-powerline (optional)
+
 ## Environment Variables
 
-GANTRY requires `GANTRY_USERNAME` to be set in the user's shell. It then sets the following for Claude Code:
+GANTRY reads username from `gantry.username` in config. The `GANTRY_USERNAME` environment variable can optionally override this for CI/CD scenarios.
+
+GANTRY sets the following environment variables for Claude Code:
 
 **OTEL:**
 - `CLAUDE_CODE_ENABLE_TELEMETRY=1`

@@ -65,6 +65,16 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 
 // ValidateGlobalConfig validates the global config has required fields
 func ValidateGlobalConfig(config *GlobalConfig) error {
+	// Validate gantry section
+	if config.Gantry == nil || config.Gantry.Username == "" {
+		return errors.New("global config missing \"gantry.username\" - please configure your username")
+	}
+
+	if strings.Contains(config.Gantry.Username, "YOUR_") || strings.Contains(config.Gantry.Username, "your-") {
+		return errors.New("global config \"gantry.username\" contains placeholder value - please configure your actual username")
+	}
+
+	// Validate OTEL section
 	if config.OTEL.Endpoint == "" {
 		return errors.New("global config missing \"otel.endpoint\" - please configure your OTEL collector endpoint")
 	}
@@ -135,6 +145,10 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 	falseVal := false
 
 	return &GlobalConfig{
+		Gantry: &GantryConfig{
+			Username:        "YOUR_USERNAME_HERE",
+			EnablePowerline: &trueVal,
+		},
 		OTEL: OTELConfig{
 			Endpoint:             "https://your-otel-collector.example.com/otlp",
 			Headers:              "Authorization=Bearer YOUR_TOKEN_HERE",
@@ -269,6 +283,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 	booleanKeys := map[string]bool{
 		"logUserPrompts": true, "includeSessionId": true,
 		"includeVersion": true, "includeAccountUuid": true, "enabled": true,
+		"enablePowerline": true,
 	}
 	numberKeys := map[string]bool{
 		"metricExportInterval": true, "logsExportInterval": true,

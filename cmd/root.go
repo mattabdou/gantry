@@ -55,25 +55,6 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Check for GANTRY_USERNAME environment variable
-	username := os.Getenv("GANTRY_USERNAME")
-	if username == "" {
-		fmt.Fprintln(os.Stderr, "Error: GANTRY_USERNAME environment variable is not set.")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Please set GANTRY_USERNAME in your shell profile:")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "  # Bash/Zsh (~/.bashrc, ~/.zshrc):")
-		fmt.Fprintln(os.Stderr, "  export GANTRY_USERNAME=\"your.username\"")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "  # PowerShell ($PROFILE):")
-		fmt.Fprintln(os.Stderr, "  $env:GANTRY_USERNAME = \"your.username\"")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "  # Windows Command Prompt (System Environment Variables):")
-		fmt.Fprintln(os.Stderr, "  setx GANTRY_USERNAME \"your.username\"")
-		fmt.Fprintln(os.Stderr, "")
-		os.Exit(1)
-	}
-
 	// Check for global config
 	if !config.GlobalConfigExists() {
 		fmt.Fprintln(os.Stderr, "Error: GANTRY is not configured.")
@@ -90,6 +71,12 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Get username from config, with env var override
+	username := globalConfig.Gantry.Username
+	if envUsername := os.Getenv("GANTRY_USERNAME"); envUsername != "" {
+		username = envUsername
 	}
 
 	// Get current working directory
@@ -117,32 +104,46 @@ func runGantry(cmd *cobra.Command, args []string) {
 		fmt.Printf("Git branch: %s\n", gitBranch)
 	}
 
-	// Configure claude-powerline theme if powerline settings exist
-	if globalConfig.Powerline != nil {
-		powerlineResult := powerline.UpdatePowerlineSettings(globalConfig.Powerline)
-		if powerlineResult.Updated {
-			fmt.Printf("Powerline: %s\n", powerlineResult.Message)
+	// Handle powerline configuration based on enablePowerline setting
+	enablePowerline := true // default to enabled
+	if globalConfig.Gantry != nil && globalConfig.Gantry.EnablePowerline != nil {
+		enablePowerline = *globalConfig.Gantry.EnablePowerline
+	}
+
+	if enablePowerline {
+		// Configure claude-powerline theme if powerline settings exist
+		if globalConfig.Powerline != nil {
+			powerlineResult := powerline.UpdatePowerlineSettings(globalConfig.Powerline)
+			if powerlineResult.Updated {
+				fmt.Printf("Powerline: %s\n", powerlineResult.Message)
+			}
+		} else {
+			// Check for claude-powerline and warn if not configured
+			powerlineCheck := powerline.CheckClaudePowerline()
+			if !powerlineCheck.Installed {
+				fmt.Println()
+				fmt.Println("Warning: claude-powerline is not configured.")
+				fmt.Println()
+				fmt.Println("claude-powerline provides a helpful status line at the bottom of Claude Code.")
+				fmt.Println("To enable it, add powerline settings to your ~/.gantryrc.json:")
+				fmt.Println()
+				fmt.Println("  \"powerline\": {")
+				fmt.Println("    \"theme\": \"dark\",")
+				fmt.Println("    \"style\": \"powerline\"")
+				fmt.Println("  }")
+				fmt.Println()
+				fmt.Println("Available themes: dark, light, nord, tokyo-night, rose-pine, gruvbox")
+				fmt.Println("Available styles: minimal, powerline, capsule")
+				fmt.Println()
+				fmt.Println("For more information: https://github.com/Owloops/claude-powerline")
+				fmt.Println()
+			}
 		}
 	} else {
-		// Check for claude-powerline and warn if not configured
-		powerlineCheck := powerline.CheckClaudePowerline()
-		if !powerlineCheck.Installed {
-			fmt.Println()
-			fmt.Println("Warning: claude-powerline is not configured.")
-			fmt.Println()
-			fmt.Println("claude-powerline provides a helpful status line at the bottom of Claude Code.")
-			fmt.Println("To enable it, add powerline settings to your ~/.gantryrc.json:")
-			fmt.Println()
-			fmt.Println("  \"powerline\": {")
-			fmt.Println("    \"theme\": \"dark\",")
-			fmt.Println("    \"style\": \"powerline\"")
-			fmt.Println("  }")
-			fmt.Println()
-			fmt.Println("Available themes: dark, light, nord, tokyo-night, rose-pine, gruvbox")
-			fmt.Println("Available styles: minimal, powerline, capsule")
-			fmt.Println()
-			fmt.Println("For more information: https://github.com/Owloops/claude-powerline")
-			fmt.Println()
+		// Powerline is disabled - remove any existing configuration
+		removeResult := powerline.RemovePowerlineSettings()
+		if removeResult.Updated {
+			fmt.Printf("Powerline: %s\n", removeResult.Message)
 		}
 	}
 
@@ -189,7 +190,7 @@ Usage:
   gantry --version                Show version number
 
 Environment Variables:
-  GANTRY_USERNAME                 Required. Your username for telemetry attribution.
+  GANTRY_USERNAME                 Optional. Overrides gantry.username from config.
 
 Configuration Files:
   ~/.gantryrc.json                Global configuration (created by 'gantry init')
@@ -202,6 +203,8 @@ Examples:
   gantry init --force             Reinitialize global configuration
   gantry config                   Edit configuration interactively
   gantry config show              View current configuration
+  gantry config set gantry.username john.doe
+  gantry config set gantry.enablePowerline false
   gantry config set otel.endpoint https://collector.example.com/otlp
   gantry update                   Update to latest version
 

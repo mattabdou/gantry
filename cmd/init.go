@@ -56,9 +56,10 @@ func runInit() {
 	fmt.Printf("Configuration file created at: %s\n", configPath)
 	fmt.Println()
 	fmt.Println("Before running gantry, please edit the configuration file to set:")
+	fmt.Println("  - gantry.username: Your username for telemetry attribution")
 	fmt.Println("  - otel.endpoint: Your OTEL collector endpoint URL")
 	fmt.Println("  - otel.headers: Your authentication headers (e.g., Bearer token)")
 	fmt.Println()
-	fmt.Println("You must also set the GANTRY_USERNAME environment variable on your system.")
+	fmt.Println("Or run 'gantry config' to configure interactively.")
 	fmt.Println()
 }

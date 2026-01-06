@@ -83,6 +83,18 @@ func displayConfig(cfg *config.GlobalConfig) {
 	fmt.Println("Current GANTRY Configuration")
 	fmt.Println("============================")
 	fmt.Println()
+
+	if cfg.Gantry != nil {
+		fmt.Println("GANTRY Settings:")
+		fmt.Printf("  Username:              %s\n", cfg.Gantry.Username)
+		enablePowerline := true
+		if cfg.Gantry.EnablePowerline != nil {
+			enablePowerline = *cfg.Gantry.EnablePowerline
+		}
+		fmt.Printf("  Enable Powerline:      %v\n", enablePowerline)
+		fmt.Println()
+	}
+
 	fmt.Println("OTEL Settings:")
 	fmt.Printf("  Endpoint:              %s\n", cfg.OTEL.Endpoint)
 	fmt.Printf("  Headers:               %s\n", maskToken(cfg.OTEL.Headers))
@@ -270,6 +282,9 @@ func editConfig() {
 	}
 
 	// Ensure all sections exist
+	if cfg.Gantry == nil {
+		cfg.Gantry = config.GetDefaultGlobalConfigTemplate().Gantry
+	}
 	if cfg.Bedrock == nil {
 		cfg.Bedrock = config.GetDefaultGlobalConfigTemplate().Bedrock
 	}
@@ -285,8 +300,23 @@ func editConfig() {
 	fmt.Println("Press Enter to keep the current value.")
 	fmt.Println()
 
-	// Required settings
-	fmt.Println("--- Required Settings ---")
+	// GANTRY settings
+	fmt.Println("--- GANTRY Settings ---")
+	fmt.Println()
+
+	cfg.Gantry.Username = prompt(scanner, "Your username (for telemetry attribution)", cfg.Gantry.Username)
+
+	enablePowerline := true
+	if cfg.Gantry.EnablePowerline != nil {
+		enablePowerline = *cfg.Gantry.EnablePowerline
+	}
+	newEnablePowerline := promptBoolean(scanner, "Enable powerline status bar?", enablePowerline)
+	cfg.Gantry.EnablePowerline = &newEnablePowerline
+
+	fmt.Println()
+
+	// Required OTEL settings
+	fmt.Println("--- OTEL Settings ---")
 	fmt.Println()
 
 	cfg.OTEL.Endpoint = prompt(scanner, "OTEL Endpoint URL", cfg.OTEL.Endpoint)
