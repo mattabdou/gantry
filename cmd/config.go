@@ -92,6 +92,11 @@ func displayConfig(cfg *config.GlobalConfig) {
 			enablePowerline = *cfg.Gantry.EnablePowerline
 		}
 		fmt.Printf("  Enable Powerline:      %v\n", enablePowerline)
+		bypassLoadingScreen := false
+		if cfg.Gantry.BypassLoadingScreen != nil {
+			bypassLoadingScreen = *cfg.Gantry.BypassLoadingScreen
+		}
+		fmt.Printf("  Bypass Loading Screen: %v\n", bypassLoadingScreen)
 		fmt.Println()
 	}
 
@@ -312,6 +317,13 @@ func editConfig() {
 	}
 	newEnablePowerline := promptBoolean(scanner, "Enable powerline status bar?", enablePowerline)
 	cfg.Gantry.EnablePowerline = &newEnablePowerline
+
+	bypassLoadingScreen := false
+	if cfg.Gantry.BypassLoadingScreen != nil {
+		bypassLoadingScreen = *cfg.Gantry.BypassLoadingScreen
+	}
+	newBypassLoadingScreen := promptBoolean(scanner, "Bypass confirmation screen on startup?", bypassLoadingScreen)
+	cfg.Gantry.BypassLoadingScreen = &newBypassLoadingScreen
 
 	fmt.Println()
 

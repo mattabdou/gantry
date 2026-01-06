@@ -146,8 +146,9 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 
 	return &GlobalConfig{
 		Gantry: &GantryConfig{
-			Username:        "YOUR_USERNAME_HERE",
-			EnablePowerline: &trueVal,
+			Username:            "YOUR_USERNAME_HERE",
+			EnablePowerline:     &trueVal,
+			BypassLoadingScreen: &falseVal,
 		},
 		OTEL: OTELConfig{
 			Endpoint:             "https://your-otel-collector.example.com/otlp",
@@ -283,7 +284,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 	booleanKeys := map[string]bool{
 		"logUserPrompts": true, "includeSessionId": true,
 		"includeVersion": true, "includeAccountUuid": true, "enabled": true,
-		"enablePowerline": true,
+		"enablePowerline": true, "bypassLoadingScreen": true,
 	}
 	numberKeys := map[string]bool{
 		"metricExportInterval": true, "logsExportInterval": true,

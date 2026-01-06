@@ -137,6 +137,14 @@ func TestGetDefaultGlobalConfigTemplate(t *testing.T) {
 		t.Error("Gantry.EnablePowerline should not be nil")
 	}
 
+	if template.Gantry.BypassLoadingScreen == nil {
+		t.Error("Gantry.BypassLoadingScreen should not be nil")
+	}
+
+	if *template.Gantry.BypassLoadingScreen != false {
+		t.Error("Gantry.BypassLoadingScreen should default to false")
+	}
+
 	if template.OTEL.Endpoint == "" {
 		t.Error("OTEL.Endpoint should not be empty")
 	}

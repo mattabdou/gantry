@@ -55,6 +55,7 @@ make clean          # Remove build artifacts
 **gantry section:**
 - `username` - Username for telemetry attribution (required)
 - `enablePowerline` - Whether to configure powerline status bar (default: true)
+- `bypassLoadingScreen` - Skip the confirmation screen on startup (default: false)
 
 **otel section:**
 - `endpoint` - OTEL collector endpoint URL (required)

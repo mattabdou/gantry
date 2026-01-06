@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/launcher"
@@ -73,10 +75,16 @@ func runGantry(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// ============================================
+	// PHASE 1: Gather all information (no actions)
+	// ============================================
+
 	// Get username from config, with env var override
 	username := globalConfig.Gantry.Username
+	usernameSource := "config"
 	if envUsername := os.Getenv("GANTRY_USERNAME"); envUsername != "" {
 		username = envUsername
+		usernameSource = "env"
 	}
 
 	// Get current working directory
@@ -92,55 +100,145 @@ func runGantry(cmd *cobra.Command, args []string) {
 		projectConfig = config.GetDefaultProjectConfig()
 	}
 
-	if projectConfig.Path != "" {
-		fmt.Printf("Using project config: %s\n", projectConfig.Path)
-	} else {
-		fmt.Println("No .gantry.json found, using default project name: Unknown")
-	}
-
 	// Get git branch
 	gitBranch := launcher.GetGitBranch()
-	if gitBranch != "" {
-		fmt.Printf("Git branch: %s\n", gitBranch)
-	}
 
-	// Handle powerline configuration based on enablePowerline setting
-	enablePowerline := true // default to enabled
+	// Determine powerline action
+	enablePowerline := true
 	if globalConfig.Gantry != nil && globalConfig.Gantry.EnablePowerline != nil {
 		enablePowerline = *globalConfig.Gantry.EnablePowerline
 	}
 
+	// Determine powerline status message
+	var powerlineAction string
 	if enablePowerline {
-		// Configure claude-powerline theme if powerline settings exist
+		if globalConfig.Powerline != nil {
+			theme := globalConfig.Powerline.Theme
+			if theme == "" {
+				theme = "dark"
+			}
+			style := globalConfig.Powerline.Style
+			if style == "" {
+				style = "powerline"
+			}
+			powerlineAction = fmt.Sprintf("Configure (theme=%s, style=%s)", theme, style)
+		} else {
+			powerlineAction = "Enabled (no theme configured)"
+		}
+	} else {
+		powerlineAction = "Disabled (will remove if exists)"
+	}
+
+	// Check if we should bypass the loading screen
+	bypassLoadingScreen := false
+	if globalConfig.Gantry != nil && globalConfig.Gantry.BypassLoadingScreen != nil {
+		bypassLoadingScreen = *globalConfig.Gantry.BypassLoadingScreen
+	}
+
+	// ============================================
+	// PHASE 2: Show confirmation screen (if enabled)
+	// ============================================
+
+	if !bypassLoadingScreen {
+		fmt.Println()
+		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║              GANTRY - Claude Code Launcher                       ║")
+		fmt.Printf("║              Version: %-43s ║\n", Version)
+		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
+		fmt.Println("║  The following configuration will be applied:                    ║")
+		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
+
+		// User info
+		fmt.Println("║  USER IDENTITY                                                   ║")
+		if usernameSource == "env" {
+			fmt.Printf("║    Username:        %-44s ║\n", truncateString(username, 44)+" (env override)")
+		} else {
+			fmt.Printf("║    Username:        %-44s ║\n", truncateString(username, 44))
+		}
+		fmt.Println("║                                                                  ║")
+
+		// Project info
+		fmt.Println("║  PROJECT                                                         ║")
+		fmt.Printf("║    Project Name:    %-44s ║\n", truncateString(projectConfig.Config.ProjectName, 44))
+		if projectConfig.Path != "" {
+			fmt.Printf("║    Config File:     %-44s ║\n", truncateString(projectConfig.Path, 44))
+		} else {
+			fmt.Printf("║    Config File:     %-44s ║\n", "(none - using defaults)")
+		}
+		if gitBranch != "" {
+			fmt.Printf("║    Git Branch:      %-44s ║\n", truncateString(gitBranch, 44))
+		}
+		fmt.Println("║                                                                  ║")
+
+		// OTEL info
+		fmt.Println("║  TELEMETRY (OTEL)                                                ║")
+		fmt.Printf("║    Endpoint:        %-44s ║\n", truncateString(globalConfig.OTEL.Endpoint, 44))
+		fmt.Println("║                                                                  ║")
+
+		// Bedrock info
+		fmt.Println("║  AWS BEDROCK                                                     ║")
+		if globalConfig.Bedrock != nil && globalConfig.Bedrock.Enabled {
+			fmt.Printf("║    Status:          %-44s ║\n", "Enabled")
+			fmt.Printf("║    AWS Profile:     %-44s ║\n", truncateString(globalConfig.Bedrock.AWSProfile, 44))
+			fmt.Printf("║    Region:          %-44s ║\n", globalConfig.Bedrock.AWSRegion)
+			fmt.Printf("║    Model:           %-44s ║\n", truncateString(globalConfig.Bedrock.Model, 44))
+		} else {
+			fmt.Printf("║    Status:          %-44s ║\n", "Disabled")
+		}
+		fmt.Println("║                                                                  ║")
+
+		// Powerline info
+		fmt.Println("║  POWERLINE STATUS BAR                                            ║")
+		fmt.Printf("║    Action:          %-44s ║\n", truncateString(powerlineAction, 44))
+		fmt.Println("║                                                                  ║")
+
+		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
+		fmt.Println("║  Press ENTER to continue, or 'q' to cancel...                    ║")
+		fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
+
+		// Wait for user input
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		if input == "q" || input == "quit" || input == "n" || input == "no" || input == "cancel" {
+			fmt.Println("Cancelled.")
+			os.Exit(0)
+		}
+	}
+
+	// ============================================
+	// PHASE 3: Execute actions
+	// ============================================
+
+	if bypassLoadingScreen {
+		// Show minimal output when bypassing
+		if projectConfig.Path != "" {
+			fmt.Printf("Using project config: %s\n", projectConfig.Path)
+		}
+		if gitBranch != "" {
+			fmt.Printf("Git branch: %s\n", gitBranch)
+		}
+	}
+
+	// Handle powerline configuration
+	if enablePowerline {
 		if globalConfig.Powerline != nil {
 			powerlineResult := powerline.UpdatePowerlineSettings(globalConfig.Powerline)
 			if powerlineResult.Updated {
 				fmt.Printf("Powerline: %s\n", powerlineResult.Message)
 			}
-		} else {
-			// Check for claude-powerline and warn if not configured
+		} else if bypassLoadingScreen {
+			// Only show warning if bypassing loading screen (otherwise it was shown in confirmation)
 			powerlineCheck := powerline.CheckClaudePowerline()
 			if !powerlineCheck.Installed {
 				fmt.Println()
 				fmt.Println("Warning: claude-powerline is not configured.")
-				fmt.Println()
-				fmt.Println("claude-powerline provides a helpful status line at the bottom of Claude Code.")
-				fmt.Println("To enable it, add powerline settings to your ~/.gantryrc.json:")
-				fmt.Println()
-				fmt.Println("  \"powerline\": {")
-				fmt.Println("    \"theme\": \"dark\",")
-				fmt.Println("    \"style\": \"powerline\"")
-				fmt.Println("  }")
-				fmt.Println()
-				fmt.Println("Available themes: dark, light, nord, tokyo-night, rose-pine, gruvbox")
-				fmt.Println("Available styles: minimal, powerline, capsule")
-				fmt.Println()
-				fmt.Println("For more information: https://github.com/Owloops/claude-powerline")
+				fmt.Println("To enable it, add powerline settings to your ~/.gantryrc.json")
 				fmt.Println()
 			}
 		}
 	} else {
-		// Powerline is disabled - remove any existing configuration
 		removeResult := powerline.RemovePowerlineSettings()
 		if removeResult.Updated {
 			fmt.Printf("Powerline: %s\n", removeResult.Message)
@@ -167,6 +265,17 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 		os.Exit(1)
 	}
+}
+
+// truncateString truncates a string to maxLen and adds "..." if truncated
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
 }
 
 func showHelp() {
@@ -205,6 +314,7 @@ Examples:
   gantry config show              View current configuration
   gantry config set gantry.username john.doe
   gantry config set gantry.enablePowerline false
+  gantry config set gantry.bypassLoadingScreen true
   gantry config set otel.endpoint https://collector.example.com/otlp
   gantry update                   Update to latest version
 

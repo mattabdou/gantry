@@ -10,8 +10,9 @@ type GlobalConfig struct {
 
 // GantryConfig contains GANTRY-specific configuration
 type GantryConfig struct {
-	Username        string `json:"username"`
-	EnablePowerline *bool  `json:"enablePowerline,omitempty"`
+	Username            string `json:"username"`
+	EnablePowerline     *bool  `json:"enablePowerline,omitempty"`
+	BypassLoadingScreen *bool  `json:"bypassLoadingScreen,omitempty"`
 }
 
 // OTELConfig contains OpenTelemetry configuration

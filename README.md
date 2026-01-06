@@ -97,28 +97,7 @@ make build-all
 
 ## Setup
 
-### 1. Set Your Username
-
-Add the `GANTRY_USERNAME` environment variable to your shell profile:
-
-**Bash/Zsh** (`~/.bashrc`, `~/.zshrc`):
-```bash
-export GANTRY_USERNAME="your.username"
-```
-
-**PowerShell** (`$PROFILE`):
-```powershell
-$env:GANTRY_USERNAME = "your.username"
-```
-
-**Windows Command Prompt** (System Environment Variables):
-```cmd
-setx GANTRY_USERNAME "your.username"
-```
-
-After adding, restart your terminal or source your profile.
-
-### 2. Initialize GANTRY
+### 1. Initialize GANTRY
 
 Run the init command to create the global configuration file:
 
@@ -128,12 +107,21 @@ gantry init
 
 This creates `~/.gantryrc.json` with default settings.
 
-### 3. Configure AWS Bedrock and OTEL
+### 2. Configure Your Settings
 
-Edit `~/.gantryrc.json` and configure your settings:
+Edit `~/.gantryrc.json` or run `gantry config` for an interactive editor.
+
+At minimum, you need to configure:
+- Your username (for telemetry attribution)
+- Your OTEL collector endpoint and authentication
 
 ```json
 {
+  "gantry": {
+    "username": "your.username",
+    "enablePowerline": true,
+    "bypassLoadingScreen": false
+  },
   "otel": {
     "endpoint": "https://your-otel-collector.example.com/otlp",
     "headers": "Authorization=Bearer YOUR_TOKEN_HERE",
@@ -193,7 +181,7 @@ When Bedrock is enabled, GANTRY sets the following environment variables:
 | `includeVersion` | Include app version in metrics | `false` |
 | `includeAccountUuid` | Include account UUID in metrics | `true` |
 
-### 4. Configure Your Projects (Optional)
+### 3. Configure Your Projects (Optional)
 
 Create a `.gantry.json` file in your project root:
 
@@ -239,6 +227,66 @@ gantry --help         # Show GANTRY help
 gantry --version      # Show GANTRY version
 ```
 
+## Confirmation Screen
+
+When you run `gantry`, it displays a confirmation screen showing all the configuration that will be applied before launching Claude Code:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║              GANTRY - Claude Code Launcher                       ║
+║              Version: 1.0.0                                      ║
+╠══════════════════════════════════════════════════════════════════╣
+║  The following configuration will be applied:                    ║
+╠══════════════════════════════════════════════════════════════════╣
+║  USER IDENTITY                                                   ║
+║    Username:        john.doe                                     ║
+║                                                                  ║
+║  PROJECT                                                         ║
+║    Project Name:    billing-api                                  ║
+║    Config File:     /home/user/projects/api/.gantry.json         ║
+║    Git Branch:      feature/JIRA-123-add-auth                    ║
+║                                                                  ║
+║  TELEMETRY (OTEL)                                                ║
+║    Endpoint:        https://collector.example.com/otlp           ║
+║                                                                  ║
+║  AWS BEDROCK                                                     ║
+║    Status:          Enabled                                      ║
+║    AWS Profile:     my-profile                                   ║
+║    Region:          us-east-2                                    ║
+║    Model:           us.anthropic.claude-opus-4-5-20251101-v1:0   ║
+║                                                                  ║
+║  POWERLINE STATUS BAR                                            ║
+║    Action:          Configure (theme=dark, style=powerline)      ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Press ENTER to continue, or 'q' to cancel...                    ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+This allows you to review the configuration before Claude Code starts. Press **Enter** to continue or **q** to cancel.
+
+### Disabling the Confirmation Screen
+
+If you prefer to skip the confirmation screen and launch Claude Code immediately, set `bypassLoadingScreen` to `true` in your `~/.gantryrc.json`:
+
+```json
+{
+  "gantry": {
+    "username": "your.username",
+    "enablePowerline": true,
+    "bypassLoadingScreen": true
+  }
+}
+```
+
+Or use the command line:
+
+```bash
+gantry config set gantry.bypassLoadingScreen true
+```
+
+When bypassed, GANTRY will show minimal output (project config path and git branch) before launching Claude Code.
+
 ## Configuration Management
 
 GANTRY provides an interactive configuration editor and command-line tools for managing your settings.
@@ -280,6 +328,9 @@ Use dot notation for nested values:
 
 | Key | Type | Description |
 |-----|------|-------------|
+| `gantry.username` | string | Your username for telemetry |
+| `gantry.enablePowerline` | boolean | Enable powerline status bar |
+| `gantry.bypassLoadingScreen` | boolean | Skip confirmation screen on startup |
 | `bedrock.enabled` | boolean | Enable AWS Bedrock |
 | `bedrock.awsProfile` | string | AWS profile name |
 | `bedrock.awsRegion` | string | AWS region |
@@ -306,7 +357,7 @@ GANTRY adds the following resource attributes to OTEL telemetry:
 
 | Attribute | Source | Example |
 |-----------|--------|---------|
-| `gantry.username` | `GANTRY_USERNAME` env var | `john.doe` |
+| `gantry.username` | `gantry.username` config (or `GANTRY_USERNAME` env override) | `john.doe` |
 | `gantry.working_path` | Current working directory | `/home/user/projects/api` |
 | `gantry.project_name` | `.gantry.json` or `"Unknown"` | `billing-api` |
 | `gantry.repository` | `.gantry.json` | `github.com/your-org/billing-api` |
@@ -418,9 +469,9 @@ If no powerline settings are configured, GANTRY will display a warning with setu
 
 ## Troubleshooting
 
-### "GANTRY_USERNAME environment variable is not set"
+### "Global config missing gantry.username"
 
-Set the environment variable in your shell profile and restart your terminal. See [Setup](#1-set-your-username).
+Edit `~/.gantryrc.json` and set your username in the `gantry` section, or run `gantry config` to configure interactively.
 
 ### "GANTRY is not configured"
 
