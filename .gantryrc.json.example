@@ -1,5 +1,4 @@
 {
-  "autoUpdate": true,
   "otel": {
     "endpoint": "https://your-otel-collector.example.com/otlp",
     "headers": "Authorization=Bearer YOUR_TOKEN_HERE",

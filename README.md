@@ -6,7 +6,6 @@ A launcher for Claude Code that configures environment and telemetry.
 
 GANTRY automatically configures Claude Code with:
 
-- **Auto-Update** - Automatically updates Claude Code to the latest version on launch
 - **AWS Bedrock** - Configures Claude Code to use AWS Bedrock API
 - **Telemetry** - OpenTelemetry attributes for AI cost tracking
   - **Username** - Who is using the AI
@@ -281,7 +280,6 @@ Use dot notation for nested values:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `autoUpdate` | boolean | Auto-update Claude Code on launch |
 | `bedrock.enabled` | boolean | Enable AWS Bedrock |
 | `bedrock.awsProfile` | string | AWS profile name |
 | `bedrock.awsRegion` | string | AWS region |
@@ -375,28 +373,6 @@ gantry version
 
 # Show version and check for updates
 gantry version --check
-```
-
-## Auto-Update (Claude Code)
-
-GANTRY automatically updates Claude Code to the latest version each time it runs. This ensures your team always has the latest features and bug fixes.
-
-The update runs `npm update -g @anthropic-ai/claude-code` before launching Claude Code.
-
-### Disabling Auto-Update
-
-To disable auto-update of Claude Code, set `autoUpdate` to `false` in your `~/.gantryrc.json`:
-
-```json
-{
-  "autoUpdate": false
-}
-```
-
-Or via command line:
-
-```bash
-gantry config set autoUpdate false
 ```
 
 ## claude-powerline Integration

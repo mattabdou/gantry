@@ -15,9 +15,9 @@ var rootCmd = &cobra.Command{
 	Short: "GANTRY - Gateway for AI Navigation, Telemetry, and Runtime Yield",
 	Long: `GANTRY is a launcher for Claude Code that configures environment and telemetry.
 
-It auto-updates Claude Code, configures AWS Bedrock API, enriches OpenTelemetry
-telemetry with user, project, and organizational attributes for AI cost tracking,
-and configures the claude-powerline status bar.`,
+It configures AWS Bedrock API, enriches OpenTelemetry telemetry with user, project,
+and organizational attributes for AI cost tracking, and configures the claude-powerline
+status bar.`,
 	Version: Version,
 	// Allow unknown flags to be passed through to Claude Code
 	DisableFlagParsing: true,
