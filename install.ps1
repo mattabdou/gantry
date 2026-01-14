@@ -35,10 +35,11 @@ function Write-Warn { Write-Host "[WARN] $args" -ForegroundColor Yellow }
 function Write-Error { Write-Host "[ERROR] $args" -ForegroundColor Red }
 
 function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    # Use PROCESSOR_ARCHITECTURE env var for maximum compatibility
+    $arch = $env:PROCESSOR_ARCHITECTURE
     switch ($arch) {
-        "X64" { return "amd64" }
-        "Arm64" { return "arm64" }
+        "AMD64" { return "amd64" }
+        "ARM64" { return "arm64" }
         default { throw "Unsupported architecture: $arch" }
     }
 }
