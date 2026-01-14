@@ -86,6 +86,11 @@ func displayConfig(cfg *config.GlobalConfig) {
 
 	if cfg.Gantry != nil {
 		fmt.Println("GANTRY Settings:")
+		mode := cfg.Gantry.Mode
+		if mode == "" {
+			mode = "(not set)"
+		}
+		fmt.Printf("  Mode:                  %s\n", mode)
 		fmt.Printf("  Username:              %s\n", cfg.Gantry.Username)
 		ignorePowerline := true
 		if cfg.Gantry.IgnorePowerline != nil {
@@ -127,12 +132,21 @@ func displayConfig(cfg *config.GlobalConfig) {
 
 	if cfg.Bedrock != nil {
 		fmt.Println("AWS Bedrock Settings:")
-		fmt.Printf("  Enabled:               %v\n", cfg.Bedrock.Enabled)
 		fmt.Printf("  AWS Profile:           %s\n", maskToken(cfg.Bedrock.AWSProfile))
 		fmt.Printf("  AWS Region:            %s\n", cfg.Bedrock.AWSRegion)
 		fmt.Printf("  Model:                 %s\n", cfg.Bedrock.Model)
 		fmt.Printf("  Max Output Tokens:     %d\n", cfg.Bedrock.MaxOutputTokens)
 		fmt.Printf("  Max Thinking Tokens:   %d\n", cfg.Bedrock.MaxThinkingTokens)
+		fmt.Println()
+	}
+
+	if cfg.LiteLLM != nil {
+		fmt.Println("LiteLLM Settings:")
+		fmt.Printf("  Base URL:              %s\n", cfg.LiteLLM.BaseURL)
+		fmt.Printf("  Auth Token:            %s\n", maskToken(cfg.LiteLLM.AuthToken))
+		fmt.Printf("  Model:                 %s\n", cfg.LiteLLM.Model)
+		fmt.Printf("  Max Output Tokens:     %d\n", cfg.LiteLLM.MaxOutputTokens)
+		fmt.Printf("  Max Thinking Tokens:   %d\n", cfg.LiteLLM.MaxThinkingTokens)
 		fmt.Println()
 	}
 
@@ -298,6 +312,9 @@ func editConfig() {
 	if cfg.Bedrock == nil {
 		cfg.Bedrock = config.GetDefaultGlobalConfigTemplate().Bedrock
 	}
+	if cfg.LiteLLM == nil {
+		cfg.LiteLLM = config.GetDefaultGlobalConfigTemplate().LiteLLM
+	}
 	if cfg.Powerline == nil {
 		cfg.Powerline = config.GetDefaultGlobalConfigTemplate().Powerline
 	}
@@ -313,6 +330,13 @@ func editConfig() {
 	// GANTRY settings
 	fmt.Println("--- GANTRY Settings ---")
 	fmt.Println()
+
+	fmt.Println("Mode determines which provider to use (bedrock or litellm)")
+	mode := cfg.Gantry.Mode
+	if mode == "" {
+		mode = "bedrock"
+	}
+	cfg.Gantry.Mode = prompt(scanner, "Mode (bedrock/litellm)", mode)
 
 	cfg.Gantry.Username = prompt(scanner, "Your username (for telemetry attribution)", cfg.Gantry.Username)
 
@@ -413,37 +437,60 @@ func editConfig() {
 
 	fmt.Println()
 	fmt.Println("--- AWS Bedrock Settings ---")
+	fmt.Println("(Used when mode is 'bedrock')")
 	fmt.Println()
 
-	cfg.Bedrock.Enabled = promptBoolean(scanner, "Enable AWS Bedrock?", cfg.Bedrock.Enabled)
+	cfg.Bedrock.AWSProfile = prompt(scanner, "AWS Profile", cfg.Bedrock.AWSProfile)
 
-	if cfg.Bedrock.Enabled {
-		cfg.Bedrock.AWSProfile = prompt(scanner, "AWS Profile", cfg.Bedrock.AWSProfile)
-
-		awsRegion := cfg.Bedrock.AWSRegion
-		if awsRegion == "" {
-			awsRegion = "us-east-2"
-		}
-		cfg.Bedrock.AWSRegion = prompt(scanner, "AWS Region", awsRegion)
-
-		model := cfg.Bedrock.Model
-		if model == "" {
-			model = "us.anthropic.claude-opus-4-5-20251101-v1:0"
-		}
-		cfg.Bedrock.Model = prompt(scanner, "Anthropic Model", model)
-
-		maxOutput := cfg.Bedrock.MaxOutputTokens
-		if maxOutput == 0 {
-			maxOutput = 8192
-		}
-		cfg.Bedrock.MaxOutputTokens = promptNumber(scanner, "Max Output Tokens", maxOutput)
-
-		maxThinking := cfg.Bedrock.MaxThinkingTokens
-		if maxThinking == 0 {
-			maxThinking = 1024
-		}
-		cfg.Bedrock.MaxThinkingTokens = promptNumber(scanner, "Max Thinking Tokens", maxThinking)
+	awsRegion := cfg.Bedrock.AWSRegion
+	if awsRegion == "" {
+		awsRegion = "us-east-2"
 	}
+	cfg.Bedrock.AWSRegion = prompt(scanner, "AWS Region", awsRegion)
+
+	bedrockModel := cfg.Bedrock.Model
+	if bedrockModel == "" {
+		bedrockModel = "us.anthropic.claude-opus-4-5-20251101-v1:0"
+	}
+	cfg.Bedrock.Model = prompt(scanner, "Anthropic Model", bedrockModel)
+
+	bedrockMaxOutput := cfg.Bedrock.MaxOutputTokens
+	if bedrockMaxOutput == 0 {
+		bedrockMaxOutput = 8192
+	}
+	cfg.Bedrock.MaxOutputTokens = promptNumber(scanner, "Max Output Tokens", bedrockMaxOutput)
+
+	bedrockMaxThinking := cfg.Bedrock.MaxThinkingTokens
+	if bedrockMaxThinking == 0 {
+		bedrockMaxThinking = 1024
+	}
+	cfg.Bedrock.MaxThinkingTokens = promptNumber(scanner, "Max Thinking Tokens", bedrockMaxThinking)
+
+	fmt.Println()
+	fmt.Println("--- LiteLLM Settings ---")
+	fmt.Println("(Used when mode is 'litellm')")
+	fmt.Println()
+
+	cfg.LiteLLM.BaseURL = prompt(scanner, "LiteLLM Base URL", cfg.LiteLLM.BaseURL)
+	cfg.LiteLLM.AuthToken = prompt(scanner, "LiteLLM Auth Token", cfg.LiteLLM.AuthToken)
+
+	litellmModel := cfg.LiteLLM.Model
+	if litellmModel == "" {
+		litellmModel = "claude-opus-4-5-20251101"
+	}
+	cfg.LiteLLM.Model = prompt(scanner, "Anthropic Model", litellmModel)
+
+	litellmMaxOutput := cfg.LiteLLM.MaxOutputTokens
+	if litellmMaxOutput == 0 {
+		litellmMaxOutput = 8192
+	}
+	cfg.LiteLLM.MaxOutputTokens = promptNumber(scanner, "Max Output Tokens", litellmMaxOutput)
+
+	litellmMaxThinking := cfg.LiteLLM.MaxThinkingTokens
+	if litellmMaxThinking == 0 {
+		litellmMaxThinking = 1024
+	}
+	cfg.LiteLLM.MaxThinkingTokens = promptNumber(scanner, "Max Thinking Tokens", litellmMaxThinking)
 
 	fmt.Println()
 	fmt.Println("--- Powerline Settings ---")

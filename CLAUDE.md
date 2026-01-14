@@ -4,7 +4,7 @@
 
 GANTRY (Gateway for AI Navigation, Telemetry, and Runtime Yield) is a Go CLI application that acts as a launcher/wrapper for Claude Code. It enriches Claude Code with:
 
-- **AWS Bedrock Integration** - Configures Claude Code to use AWS Bedrock API
+- **Multiple Providers** - Supports AWS Bedrock or LiteLLM proxy via `mode` setting
 - **OpenTelemetry Telemetry** - Adds custom resource attributes for AI cost tracking (username, project, team, cost center, git branch)
 - **claude-powerline** - Configures the status bar theme and style
 
@@ -46,13 +46,14 @@ make clean          # Remove build artifacts
 
 ## Key Configuration Files
 
-- `~/.gantryrc.json` - Global config (gantry settings, OTEL endpoint, headers, Bedrock settings, powerline)
+- `~/.gantryrc.json` - Global config (gantry settings, OTEL endpoint, headers, Bedrock/LiteLLM settings, powerline)
 - `.gantry.json` - Per-project config (projectName, repository, team, costCenter)
 - `~/.claude/settings.json` - Claude Code settings (modified by GANTRY for powerline only if ignorePowerline=false)
 
 ## Configuration Sections in ~/.gantryrc.json
 
 **gantry section:**
+- `mode` - Provider mode: `bedrock` or `litellm` (required, or use `--mode` flag)
 - `username` - Username for telemetry attribution (required)
 - `ignorePowerline` - Skip all powerline configuration (default: true)
 - `enablePowerline` - Whether to configure powerline status bar (default: true, requires ignorePowerline=false)
@@ -63,8 +64,15 @@ make clean          # Remove build artifacts
 - `headers` - Authentication headers
 - Other OTEL configuration options
 
-**bedrock section:**
-- AWS Bedrock API configuration (optional)
+**bedrock section:** (used when mode is `bedrock`)
+- `awsProfile` - AWS profile name
+- `awsRegion` - AWS region
+- `model`, `maxOutputTokens`, `maxThinkingTokens`
+
+**litellm section:** (used when mode is `litellm`)
+- `baseUrl` - LiteLLM proxy base URL
+- `authToken` - Authentication token
+- `model`, `maxOutputTokens`, `maxThinkingTokens`
 
 **powerline section:**
 - Theme and style settings for claude-powerline (optional)
@@ -81,9 +89,13 @@ GANTRY sets the following environment variables for Claude Code:
 - `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`
 - `OTEL_RESOURCE_ATTRIBUTES` (contains gantry.username, gantry.project_name, gantry.git_branch, etc.)
 
-**Bedrock:**
+**Bedrock mode:**
 - `CLAUDE_CODE_USE_BEDROCK=1`
 - `AWS_PROFILE`, `AWS_REGION`, `ANTHROPIC_MODEL`
+- `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `MAX_THINKING_TOKENS`
+
+**LiteLLM mode:**
+- `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`
 - `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `MAX_THINKING_TOKENS`
 
 ## Code Patterns

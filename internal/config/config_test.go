@@ -161,6 +161,10 @@ func TestGetDefaultGlobalConfigTemplate(t *testing.T) {
 		t.Error("Bedrock should not be nil")
 	}
 
+	if template.LiteLLM == nil {
+		t.Error("LiteLLM should not be nil")
+	}
+
 	if template.Powerline == nil {
 		t.Error("Powerline should not be nil")
 	}

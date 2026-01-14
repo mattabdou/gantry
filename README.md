@@ -6,7 +6,7 @@ A launcher for Claude Code that configures environment and telemetry.
 
 GANTRY automatically configures Claude Code with:
 
-- **AWS Bedrock** - Configures Claude Code to use AWS Bedrock API
+- **Multiple Providers** - Support for AWS Bedrock or LiteLLM proxy
 - **Telemetry** - OpenTelemetry attributes for AI cost tracking
   - **Username** - Who is using the AI
   - **Project** - Which project the work is for
@@ -112,12 +112,15 @@ This creates `~/.gantryrc.json` with default settings.
 Edit `~/.gantryrc.json` or run `gantry config` for an interactive editor.
 
 At minimum, you need to configure:
+- Your mode (bedrock or litellm)
 - Your username (for telemetry attribution)
 - Your OTEL collector endpoint and authentication
+- Provider-specific settings (Bedrock or LiteLLM)
 
 ```json
 {
   "gantry": {
+    "mode": "bedrock",
     "username": "your.username",
     "ignorePowerline": true,
     "enablePowerline": true,
@@ -137,31 +140,74 @@ At minimum, you need to configure:
     "includeAccountUuid": true
   },
   "bedrock": {
-    "enabled": true,
     "awsProfile": "YOUR_AWS_PROFILE",
     "awsRegion": "us-east-2",
     "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+    "maxOutputTokens": 8192,
+    "maxThinkingTokens": 1024
+  },
+  "litellm": {
+    "baseUrl": "https://your-litellm-proxy.example.com",
+    "authToken": "YOUR_AUTH_TOKEN",
+    "model": "claude-opus-4-5-20251101",
     "maxOutputTokens": 8192,
     "maxThinkingTokens": 1024
   }
 }
 ```
 
+#### Provider Mode
+
+Set `gantry.mode` to select which provider to use:
+
+| Mode | Description |
+|------|-------------|
+| `bedrock` | Use AWS Bedrock as the Claude API provider |
+| `litellm` | Use LiteLLM proxy as the Claude API provider |
+
+You can also override the mode from the command line:
+
+```bash
+gantry --mode bedrock    # Use AWS Bedrock
+gantry --mode litellm    # Use LiteLLM proxy
+gantry -m bedrock        # Short form
+```
+
 #### AWS Bedrock Settings
+
+Used when `mode` is set to `bedrock`.
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `enabled` | Enable AWS Bedrock integration | `true` |
 | `awsProfile` | AWS profile name for authentication | *Required* |
 | `awsRegion` | AWS region for Bedrock | `us-east-2` |
 | `model` | Anthropic model ID | `us.anthropic.claude-opus-4-5-20251101-v1:0` |
 | `maxOutputTokens` | Maximum output tokens | `8192` |
 | `maxThinkingTokens` | Maximum thinking tokens | `1024` |
 
-When Bedrock is enabled, GANTRY sets the following environment variables:
+When in Bedrock mode, GANTRY sets the following environment variables:
 - `CLAUDE_CODE_USE_BEDROCK=1`
 - `AWS_PROFILE`
 - `AWS_REGION`
+- `ANTHROPIC_MODEL`
+- `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+- `MAX_THINKING_TOKENS`
+
+#### LiteLLM Settings
+
+Used when `mode` is set to `litellm`.
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `baseUrl` | LiteLLM proxy base URL | *Required* |
+| `authToken` | Authentication token for LiteLLM | *Required* |
+| `model` | Model name | `claude-opus-4-5-20251101` |
+| `maxOutputTokens` | Maximum output tokens | `8192` |
+| `maxThinkingTokens` | Maximum thinking tokens | `1024` |
+
+When in LiteLLM mode, GANTRY sets the following environment variables:
+- `ANTHROPIC_BASE_URL`
+- `ANTHROPIC_AUTH_TOKEN`
 - `ANTHROPIC_MODEL`
 - `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
 - `MAX_THINKING_TOKENS`
@@ -209,11 +255,15 @@ GANTRY searches for `.gantry.json` starting from the current directory and walki
 Instead of running `claude`, run `gantry`:
 
 ```bash
-# Start Claude Code with GANTRY configuration
+# Start Claude Code with GANTRY configuration (uses mode from config)
 gantry
 
+# Override the provider mode from command line
+gantry --mode bedrock    # Use AWS Bedrock
+gantry --mode litellm    # Use LiteLLM proxy
+gantry -m bedrock        # Short form
+
 # Pass arguments through to Claude Code
-gantry --help
 gantry /path/to/file
 
 # GANTRY commands
@@ -251,13 +301,13 @@ When you run `gantry`, it displays a confirmation screen showing all the configu
 ║    Endpoint:        https://collector.example.com/otlp           ║
 ║                                                                  ║
 ║  AWS BEDROCK                                                     ║
-║    Status:          Enabled                                      ║
+║    Mode:            bedrock (from config)                        ║
 ║    AWS Profile:     my-profile                                   ║
 ║    Region:          us-east-2                                    ║
 ║    Model:           us.anthropic.claude-opus-4-5-20251101-v1:0   ║
 ║                                                                  ║
 ║  POWERLINE STATUS BAR                                            ║
-║    Action:          Configure (theme=dark, style=powerline)      ║
+║    Action:          Ignored (no changes will be made)            ║
 ║                                                                  ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Press ENTER to continue, or 'q' to cancel...                    ║
@@ -273,6 +323,7 @@ If you prefer to skip the confirmation screen and launch Claude Code immediately
 ```json
 {
   "gantry": {
+    "mode": "bedrock",
     "username": "your.username",
     "ignorePowerline": true,
     "enablePowerline": true,
@@ -330,16 +381,21 @@ Use dot notation for nested values:
 
 | Key | Type | Description |
 |-----|------|-------------|
+| `gantry.mode` | string | Provider mode: `bedrock` or `litellm` |
 | `gantry.username` | string | Your username for telemetry |
 | `gantry.ignorePowerline` | boolean | Skip all powerline configuration (default: true) |
 | `gantry.enablePowerline` | boolean | Enable powerline status bar (requires ignorePowerline=false) |
 | `gantry.bypassLoadingScreen` | boolean | Skip confirmation screen on startup |
-| `bedrock.enabled` | boolean | Enable AWS Bedrock |
 | `bedrock.awsProfile` | string | AWS profile name |
 | `bedrock.awsRegion` | string | AWS region |
 | `bedrock.model` | string | Anthropic model ID |
 | `bedrock.maxOutputTokens` | number | Max output tokens |
 | `bedrock.maxThinkingTokens` | number | Max thinking tokens |
+| `litellm.baseUrl` | string | LiteLLM proxy base URL |
+| `litellm.authToken` | string | LiteLLM authentication token |
+| `litellm.model` | string | Model name |
+| `litellm.maxOutputTokens` | number | Max output tokens |
+| `litellm.maxThinkingTokens` | number | Max thinking tokens |
 | `powerline.theme` | string | Powerline color theme |
 | `powerline.style` | string | Powerline separator style |
 | `otel.endpoint` | string | OTEL collector URL |

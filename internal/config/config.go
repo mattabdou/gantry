@@ -146,6 +146,7 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 
 	return &GlobalConfig{
 		Gantry: &GantryConfig{
+			Mode:                "YOUR_MODE_HERE",
 			Username:            "YOUR_USERNAME_HERE",
 			IgnorePowerline:     &trueVal,
 			EnablePowerline:     &trueVal,
@@ -165,11 +166,17 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 			IncludeAccountUUID:   &trueVal,
 		},
 		Bedrock: &BedrockConfig{
-			Enabled:          true,
-			AWSProfile:       "YOUR_AWS_PROFILE",
-			AWSRegion:        "us-east-2",
-			Model:            "us.anthropic.claude-opus-4-5-20251101-v1:0",
-			MaxOutputTokens:  8192,
+			AWSProfile:        "YOUR_AWS_PROFILE",
+			AWSRegion:         "us-east-2",
+			Model:             "us.anthropic.claude-opus-4-5-20251101-v1:0",
+			MaxOutputTokens:   8192,
+			MaxThinkingTokens: 1024,
+		},
+		LiteLLM: &LiteLLMConfig{
+			BaseURL:           "https://your-litellm-proxy.example.com",
+			AuthToken:         "YOUR_AUTH_TOKEN_HERE",
+			Model:             "claude-opus-4-5-20251101",
+			MaxOutputTokens:   8192,
 			MaxThinkingTokens: 1024,
 		},
 		Powerline: &PowerlineConfig{
@@ -284,7 +291,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 	// Type coercion based on known types
 	booleanKeys := map[string]bool{
 		"logUserPrompts": true, "includeSessionId": true,
-		"includeVersion": true, "includeAccountUuid": true, "enabled": true,
+		"includeVersion": true, "includeAccountUuid": true,
 		"ignorePowerline": true, "enablePowerline": true, "bypassLoadingScreen": true,
 	}
 	numberKeys := map[string]bool{

@@ -36,9 +36,48 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+// parseModeFlag extracts --mode or -m flag from args and returns the mode value and filtered args
+func parseModeFlag(args []string) (mode string, filteredArgs []string) {
+	filteredArgs = make([]string, 0, len(args))
+	skipNext := false
+
+	for i, arg := range args {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+
+		// Handle --mode=value or -m=value
+		if strings.HasPrefix(arg, "--mode=") {
+			mode = strings.TrimPrefix(arg, "--mode=")
+			continue
+		}
+		if strings.HasPrefix(arg, "-m=") {
+			mode = strings.TrimPrefix(arg, "-m=")
+			continue
+		}
+
+		// Handle --mode value or -m value
+		if arg == "--mode" || arg == "-m" {
+			if i+1 < len(args) {
+				mode = args[i+1]
+				skipNext = true
+			}
+			continue
+		}
+
+		filteredArgs = append(filteredArgs, arg)
+	}
+
+	return mode, filteredArgs
+}
+
 func runGantry(cmd *cobra.Command, args []string) {
+	// Parse --mode flag from args before other processing
+	modeFlag, filteredArgs := parseModeFlag(args)
+
 	// Handle --help and --version flags manually since we disabled flag parsing
-	for _, arg := range args {
+	for _, arg := range filteredArgs {
 		if arg == "--help" || arg == "-h" {
 			showHelp()
 			return
@@ -73,6 +112,77 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Determine effective mode: command-line flag overrides config
+	mode := modeFlag
+	modeSource := "flag"
+	if mode == "" {
+		if globalConfig.Gantry != nil && globalConfig.Gantry.Mode != "" {
+			mode = globalConfig.Gantry.Mode
+			modeSource = "config"
+		}
+	}
+
+	// Validate mode is specified
+	if mode == "" {
+		fmt.Fprintln(os.Stderr, "Error: mode must be specified.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Set \"gantry.mode\" in ~/.gantryrc.json to \"bedrock\" or \"litellm\",")
+		fmt.Fprintln(os.Stderr, "or use the --mode flag:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  gantry --mode bedrock")
+		fmt.Fprintln(os.Stderr, "  gantry --mode litellm")
+		fmt.Fprintln(os.Stderr, "")
+		os.Exit(1)
+	}
+
+	// Validate mode value
+	if mode != "bedrock" && mode != "litellm" {
+		fmt.Fprintf(os.Stderr, "Error: invalid mode %q.\n", mode)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Mode must be \"bedrock\" or \"litellm\".")
+		fmt.Fprintln(os.Stderr, "")
+		os.Exit(1)
+	}
+
+	// Validate mode-specific configuration exists
+	if mode == "bedrock" {
+		if globalConfig.Bedrock == nil {
+			fmt.Fprintln(os.Stderr, "Error: Bedrock mode selected but bedrock section not configured.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Add a \"bedrock\" section to ~/.gantryrc.json with awsProfile, awsRegion, and model.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+		if globalConfig.Bedrock.AWSProfile == "" {
+			fmt.Fprintln(os.Stderr, "Error: bedrock.awsProfile is required when using Bedrock mode.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+		if globalConfig.Bedrock.AWSRegion == "" {
+			fmt.Fprintln(os.Stderr, "Error: bedrock.awsRegion is required when using Bedrock mode.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+	} else if mode == "litellm" {
+		if globalConfig.LiteLLM == nil {
+			fmt.Fprintln(os.Stderr, "Error: LiteLLM mode selected but litellm section not configured.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Add a \"litellm\" section to ~/.gantryrc.json with baseUrl, authToken, and model.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+		if globalConfig.LiteLLM.BaseURL == "" {
+			fmt.Fprintln(os.Stderr, "Error: litellm.baseUrl is required when using LiteLLM mode.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+		if globalConfig.LiteLLM.AuthToken == "" {
+			fmt.Fprintln(os.Stderr, "Error: litellm.authToken is required when using LiteLLM mode.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
 	}
 
 	// ============================================
@@ -182,15 +292,26 @@ func runGantry(cmd *cobra.Command, args []string) {
 		fmt.Printf("║    Endpoint:        %-44s ║\n", truncateString(globalConfig.OTEL.Endpoint, 44))
 		fmt.Println("║                                                                  ║")
 
-		// Bedrock info
-		fmt.Println("║  AWS BEDROCK                                                     ║")
-		if globalConfig.Bedrock != nil && globalConfig.Bedrock.Enabled {
-			fmt.Printf("║    Status:          %-44s ║\n", "Enabled")
+		// Provider info (Bedrock or LiteLLM based on mode)
+		if mode == "bedrock" {
+			fmt.Println("║  AWS BEDROCK                                                     ║")
+			if modeSource == "flag" {
+				fmt.Printf("║    Mode:            %-44s ║\n", "bedrock (from --mode flag)")
+			} else {
+				fmt.Printf("║    Mode:            %-44s ║\n", "bedrock (from config)")
+			}
 			fmt.Printf("║    AWS Profile:     %-44s ║\n", truncateString(globalConfig.Bedrock.AWSProfile, 44))
 			fmt.Printf("║    Region:          %-44s ║\n", globalConfig.Bedrock.AWSRegion)
 			fmt.Printf("║    Model:           %-44s ║\n", truncateString(globalConfig.Bedrock.Model, 44))
 		} else {
-			fmt.Printf("║    Status:          %-44s ║\n", "Disabled")
+			fmt.Println("║  LITELLM                                                         ║")
+			if modeSource == "flag" {
+				fmt.Printf("║    Mode:            %-44s ║\n", "litellm (from --mode flag)")
+			} else {
+				fmt.Printf("║    Mode:            %-44s ║\n", "litellm (from config)")
+			}
+			fmt.Printf("║    Base URL:        %-44s ║\n", truncateString(globalConfig.LiteLLM.BaseURL, 44))
+			fmt.Printf("║    Model:           %-44s ║\n", truncateString(globalConfig.LiteLLM.Model, 44))
 		}
 		fmt.Println("║                                                                  ║")
 
@@ -257,15 +378,15 @@ func runGantry(cmd *cobra.Command, args []string) {
 	// Build resource attributes
 	resourceAttributes := launcher.BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
 
-	// Build environment
-	env := launcher.BuildEnvironment(globalConfig, resourceAttributes)
+	// Build environment based on mode
+	env := launcher.BuildEnvironment(globalConfig, resourceAttributes, mode)
 
 	fmt.Println()
 	fmt.Println("Starting Claude Code with GANTRY configuration...")
 	fmt.Println()
 
-	// Launch Claude Code with all arguments passed through
-	if err := launcher.LaunchClaude(args, env); err != nil {
+	// Launch Claude Code with filtered arguments (mode flag removed)
+	if err := launcher.LaunchClaude(filteredArgs, env); err != nil {
 		if err.Error() == "executable file not found in $PATH" || err.Error() == "executable file not found in %PATH%" {
 			fmt.Fprintln(os.Stderr, "Error: Claude Code is not installed or not in PATH.")
 			fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
@@ -294,18 +415,28 @@ GANTRY - Gateway for AI Navigation, Telemetry, and Runtime Yield v%s
 A launcher for Claude Code that configures environment and telemetry.
 
 Usage:
-  gantry [claude-code-args...]    Run Claude Code with GANTRY configuration
-  gantry init [--force]           Create the global configuration file
-  gantry config                   Interactive configuration editor
-  gantry config show              Display current configuration
-  gantry config get <key>         Get a configuration value
-  gantry config set <key> <val>   Set a configuration value
-  gantry update                   Update gantry to the latest version
-  gantry update --check           Check if an update is available
-  gantry version                  Show version information
-  gantry version --check          Show version and check for updates
-  gantry --help                   Show this help message
-  gantry --version                Show version number
+  gantry [options] [claude-code-args...]    Run Claude Code with GANTRY configuration
+  gantry init [--force]                     Create the global configuration file
+  gantry config                             Interactive configuration editor
+  gantry config show                        Display current configuration
+  gantry config get <key>                   Get a configuration value
+  gantry config set <key> <val>             Set a configuration value
+  gantry update                             Update gantry to the latest version
+  gantry update --check                     Check if an update is available
+  gantry version                            Show version information
+  gantry version --check                    Show version and check for updates
+  gantry --help                             Show this help message
+  gantry --version                          Show version number
+
+Options:
+  --mode, -m <mode>               Set the provider mode (bedrock or litellm)
+                                  Overrides gantry.mode in config file
+
+Modes:
+  bedrock                         Use AWS Bedrock as the Claude API provider
+                                  Requires: bedrock.awsProfile, bedrock.awsRegion
+  litellm                         Use LiteLLM proxy as the Claude API provider
+                                  Requires: litellm.baseUrl, litellm.authToken
 
 Environment Variables:
   GANTRY_USERNAME                 Optional. Overrides gantry.username from config.
@@ -315,17 +446,19 @@ Configuration Files:
   .gantry.json                    Per-project configuration (optional)
 
 Examples:
-  gantry                          Start Claude Code in current directory
+  gantry                          Start Claude Code (uses mode from config)
+  gantry --mode bedrock           Start Claude Code with AWS Bedrock
+  gantry --mode litellm           Start Claude Code with LiteLLM proxy
+  gantry -m bedrock               Short form of --mode
   gantry --help                   Show GANTRY help
   gantry init                     Initialize global configuration
   gantry init --force             Reinitialize global configuration
   gantry config                   Edit configuration interactively
   gantry config show              View current configuration
+  gantry config set gantry.mode bedrock
   gantry config set gantry.username john.doe
-  gantry config set gantry.ignorePowerline false
-  gantry config set gantry.enablePowerline false
-  gantry config set gantry.bypassLoadingScreen true
-  gantry config set otel.endpoint https://collector.example.com/otlp
+  gantry config set bedrock.awsProfile my-profile
+  gantry config set litellm.baseUrl https://litellm.example.com
   gantry update                   Update to latest version
 
 For more information, see: https://github.com/mattabdou/gantry

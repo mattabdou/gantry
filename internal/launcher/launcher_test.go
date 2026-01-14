@@ -111,7 +111,7 @@ func TestBuildResourceAttributesNilProject(t *testing.T) {
 	}
 }
 
-func TestBuildEnvironment(t *testing.T) {
+func TestBuildEnvironmentBedrock(t *testing.T) {
 	trueVal := true
 	falseVal := false
 
@@ -130,18 +130,17 @@ func TestBuildEnvironment(t *testing.T) {
 			IncludeAccountUUID:   &trueVal,
 		},
 		Bedrock: &config.BedrockConfig{
-			Enabled:          true,
-			AWSProfile:       "test-profile",
-			AWSRegion:        "us-east-2",
-			Model:            "claude-3-opus",
-			MaxOutputTokens:  8192,
+			AWSProfile:        "test-profile",
+			AWSRegion:         "us-east-2",
+			Model:             "claude-3-opus",
+			MaxOutputTokens:   8192,
 			MaxThinkingTokens: 1024,
 		},
 	}
 
 	resourceAttributes := "gantry.username=test"
 
-	env := BuildEnvironment(globalConfig, resourceAttributes)
+	env := BuildEnvironment(globalConfig, resourceAttributes, "bedrock")
 
 	// Convert to map for easier testing
 	envMap := make(map[string]string)
@@ -182,26 +181,48 @@ func TestBuildEnvironment(t *testing.T) {
 	if envMap["ANTHROPIC_MODEL"] != "claude-3-opus" {
 		t.Error("ANTHROPIC_MODEL not set correctly")
 	}
+
+	// LiteLLM vars should NOT be set in bedrock mode
+	if _, ok := envMap["ANTHROPIC_BASE_URL"]; ok {
+		t.Error("ANTHROPIC_BASE_URL should not be set in bedrock mode")
+	}
+	if _, ok := envMap["ANTHROPIC_AUTH_TOKEN"]; ok {
+		t.Error("ANTHROPIC_AUTH_TOKEN should not be set in bedrock mode")
+	}
 }
 
-func TestBuildEnvironmentBedrockDisabled(t *testing.T) {
-	// Temporarily unset CLAUDE_CODE_USE_BEDROCK if it exists in system env
-	originalValue, wasSet := os.LookupEnv("CLAUDE_CODE_USE_BEDROCK")
-	if wasSet {
-		os.Unsetenv("CLAUDE_CODE_USE_BEDROCK")
-		defer os.Setenv("CLAUDE_CODE_USE_BEDROCK", originalValue)
+func TestBuildEnvironmentLiteLLM(t *testing.T) {
+	// Temporarily unset Bedrock-related env vars if they exist
+	bedrockEnvVars := []string{"CLAUDE_CODE_USE_BEDROCK", "AWS_PROFILE", "AWS_REGION"}
+	originalValues := make(map[string]string)
+	for _, v := range bedrockEnvVars {
+		if val, ok := os.LookupEnv(v); ok {
+			originalValues[v] = val
+			os.Unsetenv(v)
+		}
 	}
+	defer func() {
+		for k, v := range originalValues {
+			os.Setenv(k, v)
+		}
+	}()
 
 	globalConfig := &config.GlobalConfig{
 		OTEL: config.OTELConfig{
 			Endpoint: "https://collector.example.com/otlp",
 		},
-		Bedrock: &config.BedrockConfig{
-			Enabled: false,
+		LiteLLM: &config.LiteLLMConfig{
+			BaseURL:           "https://litellm.example.com",
+			AuthToken:         "test-token-123",
+			Model:             "claude-sonnet",
+			MaxOutputTokens:   4096,
+			MaxThinkingTokens: 512,
 		},
 	}
 
-	env := BuildEnvironment(globalConfig, "")
+	resourceAttributes := "gantry.username=test"
+
+	env := BuildEnvironment(globalConfig, resourceAttributes, "litellm")
 
 	// Convert to map for easier testing
 	envMap := make(map[string]string)
@@ -212,9 +233,88 @@ func TestBuildEnvironmentBedrockDisabled(t *testing.T) {
 		}
 	}
 
-	// Bedrock vars should NOT be set when disabled
+	// Check LiteLLM vars
+	if envMap["ANTHROPIC_BASE_URL"] != "https://litellm.example.com" {
+		t.Error("ANTHROPIC_BASE_URL not set correctly")
+	}
+	if envMap["ANTHROPIC_AUTH_TOKEN"] != "test-token-123" {
+		t.Error("ANTHROPIC_AUTH_TOKEN not set correctly")
+	}
+	if envMap["ANTHROPIC_MODEL"] != "claude-sonnet" {
+		t.Error("ANTHROPIC_MODEL not set correctly")
+	}
+	if envMap["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] != "4096" {
+		t.Error("CLAUDE_CODE_MAX_OUTPUT_TOKENS not set correctly")
+	}
+	if envMap["MAX_THINKING_TOKENS"] != "512" {
+		t.Error("MAX_THINKING_TOKENS not set correctly")
+	}
+
+	// Bedrock vars should NOT be set in litellm mode
 	if _, ok := envMap["CLAUDE_CODE_USE_BEDROCK"]; ok {
-		t.Error("CLAUDE_CODE_USE_BEDROCK should not be set when disabled")
+		t.Error("CLAUDE_CODE_USE_BEDROCK should not be set in litellm mode")
+	}
+	if _, ok := envMap["AWS_PROFILE"]; ok {
+		t.Error("AWS_PROFILE should not be set in litellm mode")
+	}
+	if _, ok := envMap["AWS_REGION"]; ok {
+		t.Error("AWS_REGION should not be set in litellm mode")
+	}
+}
+
+func TestBuildEnvironmentLiteLLMModeSetsNoBedrockVars(t *testing.T) {
+	// Temporarily unset Bedrock-related env vars if they exist
+	bedrockEnvVars := []string{"CLAUDE_CODE_USE_BEDROCK", "AWS_PROFILE", "AWS_REGION"}
+	originalValues := make(map[string]string)
+	for _, v := range bedrockEnvVars {
+		if val, ok := os.LookupEnv(v); ok {
+			originalValues[v] = val
+			os.Unsetenv(v)
+		}
+	}
+	defer func() {
+		for k, v := range originalValues {
+			os.Setenv(k, v)
+		}
+	}()
+
+	globalConfig := &config.GlobalConfig{
+		OTEL: config.OTELConfig{
+			Endpoint: "https://collector.example.com/otlp",
+		},
+		Bedrock: &config.BedrockConfig{
+			AWSProfile: "test-profile",
+			AWSRegion:  "us-east-2",
+		},
+		LiteLLM: &config.LiteLLMConfig{
+			BaseURL:   "https://litellm.example.com",
+			AuthToken: "test-token",
+		},
+	}
+
+	// Even with Bedrock config present, litellm mode should not set Bedrock vars
+	env := BuildEnvironment(globalConfig, "", "litellm")
+
+	// Convert to map for easier testing
+	envMap := make(map[string]string)
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	// Bedrock vars should NOT be set in litellm mode
+	if _, ok := envMap["CLAUDE_CODE_USE_BEDROCK"]; ok {
+		t.Error("CLAUDE_CODE_USE_BEDROCK should not be set in litellm mode")
+	}
+	if _, ok := envMap["AWS_PROFILE"]; ok {
+		t.Error("AWS_PROFILE should not be set in litellm mode")
+	}
+
+	// LiteLLM vars should be set
+	if envMap["ANTHROPIC_BASE_URL"] != "https://litellm.example.com" {
+		t.Error("ANTHROPIC_BASE_URL should be set in litellm mode")
 	}
 }
 
@@ -227,9 +327,13 @@ func TestBuildEnvironmentPreservesExisting(t *testing.T) {
 		OTEL: config.OTELConfig{
 			Endpoint: "https://collector.example.com/otlp",
 		},
+		Bedrock: &config.BedrockConfig{
+			AWSProfile: "test-profile",
+			AWSRegion:  "us-east-2",
+		},
 	}
 
-	env := BuildEnvironment(globalConfig, "")
+	env := BuildEnvironment(globalConfig, "", "bedrock")
 
 	// Convert to map for easier testing
 	envMap := make(map[string]string)

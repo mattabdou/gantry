@@ -72,7 +72,7 @@ func BuildResourceAttributes(username, workingPath string, projectConfig *config
 }
 
 // BuildEnvironment builds environment variables for Claude Code from global config
-func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes string) []string {
+func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes string, mode string) []string {
 	env := os.Environ()
 
 	// Helper to add environment variable
@@ -137,8 +137,8 @@ func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes stri
 	// Resource attributes (our custom attributes)
 	addEnv("OTEL_RESOURCE_ATTRIBUTES", resourceAttributes)
 
-	// AWS Bedrock configuration
-	if globalConfig.Bedrock != nil && globalConfig.Bedrock.Enabled {
+	// Provider-specific configuration based on mode
+	if mode == "bedrock" && globalConfig.Bedrock != nil {
 		bedrock := globalConfig.Bedrock
 
 		addEnv("CLAUDE_CODE_USE_BEDROCK", "1")
@@ -157,6 +157,24 @@ func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes stri
 		}
 		if bedrock.MaxThinkingTokens > 0 {
 			addEnv("MAX_THINKING_TOKENS", strconv.Itoa(bedrock.MaxThinkingTokens))
+		}
+	} else if mode == "litellm" && globalConfig.LiteLLM != nil {
+		litellm := globalConfig.LiteLLM
+
+		if litellm.BaseURL != "" {
+			addEnv("ANTHROPIC_BASE_URL", litellm.BaseURL)
+		}
+		if litellm.AuthToken != "" {
+			addEnv("ANTHROPIC_AUTH_TOKEN", litellm.AuthToken)
+		}
+		if litellm.Model != "" {
+			addEnv("ANTHROPIC_MODEL", litellm.Model)
+		}
+		if litellm.MaxOutputTokens > 0 {
+			addEnv("CLAUDE_CODE_MAX_OUTPUT_TOKENS", strconv.Itoa(litellm.MaxOutputTokens))
+		}
+		if litellm.MaxThinkingTokens > 0 {
+			addEnv("MAX_THINKING_TOKENS", strconv.Itoa(litellm.MaxThinkingTokens))
 		}
 	}
 

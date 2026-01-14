@@ -5,11 +5,13 @@ type GlobalConfig struct {
 	Gantry    *GantryConfig    `json:"gantry,omitempty"`
 	OTEL      OTELConfig       `json:"otel"`
 	Bedrock   *BedrockConfig   `json:"bedrock,omitempty"`
+	LiteLLM   *LiteLLMConfig   `json:"litellm,omitempty"`
 	Powerline *PowerlineConfig `json:"powerline,omitempty"`
 }
 
 // GantryConfig contains GANTRY-specific configuration
 type GantryConfig struct {
+	Mode                string `json:"mode,omitempty"`
 	Username            string `json:"username"`
 	IgnorePowerline     *bool  `json:"ignorePowerline,omitempty"`
 	EnablePowerline     *bool  `json:"enablePowerline,omitempty"`
@@ -33,12 +35,20 @@ type OTELConfig struct {
 
 // BedrockConfig contains AWS Bedrock configuration
 type BedrockConfig struct {
-	Enabled          bool   `json:"enabled"`
-	AWSProfile       string `json:"awsProfile,omitempty"`
-	AWSRegion        string `json:"awsRegion,omitempty"`
-	Model            string `json:"model,omitempty"`
-	MaxOutputTokens  int    `json:"maxOutputTokens,omitempty"`
-	MaxThinkingTokens int   `json:"maxThinkingTokens,omitempty"`
+	AWSProfile        string `json:"awsProfile,omitempty"`
+	AWSRegion         string `json:"awsRegion,omitempty"`
+	Model             string `json:"model,omitempty"`
+	MaxOutputTokens   int    `json:"maxOutputTokens,omitempty"`
+	MaxThinkingTokens int    `json:"maxThinkingTokens,omitempty"`
+}
+
+// LiteLLMConfig contains LiteLLM proxy configuration
+type LiteLLMConfig struct {
+	BaseURL           string `json:"baseUrl,omitempty"`
+	AuthToken         string `json:"authToken,omitempty"`
+	Model             string `json:"model,omitempty"`
+	MaxOutputTokens   int    `json:"maxOutputTokens,omitempty"`
+	MaxThinkingTokens int    `json:"maxThinkingTokens,omitempty"`
 }
 
 // PowerlineConfig contains claude-powerline configuration
