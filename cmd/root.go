@@ -104,6 +104,11 @@ func runGantry(cmd *cobra.Command, args []string) {
 	gitBranch := launcher.GetGitBranch()
 
 	// Determine powerline action
+	ignorePowerline := true
+	if globalConfig.Gantry != nil && globalConfig.Gantry.IgnorePowerline != nil {
+		ignorePowerline = *globalConfig.Gantry.IgnorePowerline
+	}
+
 	enablePowerline := true
 	if globalConfig.Gantry != nil && globalConfig.Gantry.EnablePowerline != nil {
 		enablePowerline = *globalConfig.Gantry.EnablePowerline
@@ -111,7 +116,9 @@ func runGantry(cmd *cobra.Command, args []string) {
 
 	// Determine powerline status message
 	var powerlineAction string
-	if enablePowerline {
+	if ignorePowerline {
+		powerlineAction = "Ignored (no changes will be made)"
+	} else if enablePowerline {
 		if globalConfig.Powerline != nil {
 			theme := globalConfig.Powerline.Theme
 			if theme == "" {
@@ -221,27 +228,29 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Handle powerline configuration
-	if enablePowerline {
-		if globalConfig.Powerline != nil {
-			powerlineResult := powerline.UpdatePowerlineSettings(globalConfig.Powerline)
-			if powerlineResult.Updated {
-				fmt.Printf("Powerline: %s\n", powerlineResult.Message)
+	// Handle powerline configuration (skip if ignorePowerline is true)
+	if !ignorePowerline {
+		if enablePowerline {
+			if globalConfig.Powerline != nil {
+				powerlineResult := powerline.UpdatePowerlineSettings(globalConfig.Powerline)
+				if powerlineResult.Updated {
+					fmt.Printf("Powerline: %s\n", powerlineResult.Message)
+				}
+			} else if bypassLoadingScreen {
+				// Only show warning if bypassing loading screen (otherwise it was shown in confirmation)
+				powerlineCheck := powerline.CheckClaudePowerline()
+				if !powerlineCheck.Installed {
+					fmt.Println()
+					fmt.Println("Warning: claude-powerline is not configured.")
+					fmt.Println("To enable it, add powerline settings to your ~/.gantryrc.json")
+					fmt.Println()
+				}
 			}
-		} else if bypassLoadingScreen {
-			// Only show warning if bypassing loading screen (otherwise it was shown in confirmation)
-			powerlineCheck := powerline.CheckClaudePowerline()
-			if !powerlineCheck.Installed {
-				fmt.Println()
-				fmt.Println("Warning: claude-powerline is not configured.")
-				fmt.Println("To enable it, add powerline settings to your ~/.gantryrc.json")
-				fmt.Println()
+		} else {
+			removeResult := powerline.RemovePowerlineSettings()
+			if removeResult.Updated {
+				fmt.Printf("Powerline: %s\n", removeResult.Message)
 			}
-		}
-	} else {
-		removeResult := powerline.RemovePowerlineSettings()
-		if removeResult.Updated {
-			fmt.Printf("Powerline: %s\n", removeResult.Message)
 		}
 	}
 
@@ -313,6 +322,7 @@ Examples:
   gantry config                   Edit configuration interactively
   gantry config show              View current configuration
   gantry config set gantry.username john.doe
+  gantry config set gantry.ignorePowerline false
   gantry config set gantry.enablePowerline false
   gantry config set gantry.bypassLoadingScreen true
   gantry config set otel.endpoint https://collector.example.com/otlp

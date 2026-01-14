@@ -119,6 +119,7 @@ At minimum, you need to configure:
 {
   "gantry": {
     "username": "your.username",
+    "ignorePowerline": true,
     "enablePowerline": true,
     "bypassLoadingScreen": false
   },
@@ -273,6 +274,7 @@ If you prefer to skip the confirmation screen and launch Claude Code immediately
 {
   "gantry": {
     "username": "your.username",
+    "ignorePowerline": true,
     "enablePowerline": true,
     "bypassLoadingScreen": true
   }
@@ -329,7 +331,8 @@ Use dot notation for nested values:
 | Key | Type | Description |
 |-----|------|-------------|
 | `gantry.username` | string | Your username for telemetry |
-| `gantry.enablePowerline` | boolean | Enable powerline status bar |
+| `gantry.ignorePowerline` | boolean | Skip all powerline configuration (default: true) |
+| `gantry.enablePowerline` | boolean | Enable powerline status bar (requires ignorePowerline=false) |
 | `gantry.bypassLoadingScreen` | boolean | Skip confirmation screen on startup |
 | `bedrock.enabled` | boolean | Enable AWS Bedrock |
 | `bedrock.awsProfile` | string | AWS profile name |
@@ -428,14 +431,20 @@ gantry version --check
 
 ## claude-powerline Integration
 
-GANTRY automatically configures [claude-powerline](https://github.com/Owloops/claude-powerline), which provides a helpful status line at the bottom of Claude Code showing context about your session.
+GANTRY can optionally configure [claude-powerline](https://github.com/Owloops/claude-powerline), which provides a helpful status line at the bottom of Claude Code showing context about your session.
+
+By default, GANTRY does not modify powerline settings (`ignorePowerline: true`). To enable powerline configuration, set `ignorePowerline` to `false`.
 
 ### Configuration
 
-Add the `powerline` section to your `~/.gantryrc.json`:
+Add the following to your `~/.gantryrc.json`:
 
 ```json
 {
+  "gantry": {
+    "ignorePowerline": false,
+    "enablePowerline": true
+  },
   "powerline": {
     "theme": "dark",
     "style": "powerline"
@@ -460,12 +469,13 @@ Add the `powerline` section to your `~/.gantryrc.json`:
 
 ### How It Works
 
-When you run `gantry`, it automatically:
-1. Reads your powerline settings from `~/.gantryrc.json`
-2. Updates `~/.claude/settings.json` with the correct statusLine configuration
-3. Claude Code then uses these settings to display the powerline
+When you run `gantry` with `ignorePowerline: false`, it:
+1. Checks `enablePowerline` to determine whether to configure or remove powerline
+2. Reads your powerline theme/style settings from `~/.gantryrc.json`
+3. Updates `~/.claude/settings.json` with the correct statusLine configuration
+4. Claude Code then uses these settings to display the powerline
 
-If no powerline settings are configured, GANTRY will display a warning with setup instructions.
+If `ignorePowerline` is `true` (the default), GANTRY will not modify `~/.claude/settings.json` at all.
 
 ## Troubleshooting
 

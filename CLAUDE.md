@@ -48,13 +48,14 @@ make clean          # Remove build artifacts
 
 - `~/.gantryrc.json` - Global config (gantry settings, OTEL endpoint, headers, Bedrock settings, powerline)
 - `.gantry.json` - Per-project config (projectName, repository, team, costCenter)
-- `~/.claude/settings.json` - Claude Code settings (modified by GANTRY for powerline)
+- `~/.claude/settings.json` - Claude Code settings (modified by GANTRY for powerline only if ignorePowerline=false)
 
 ## Configuration Sections in ~/.gantryrc.json
 
 **gantry section:**
 - `username` - Username for telemetry attribution (required)
-- `enablePowerline` - Whether to configure powerline status bar (default: true)
+- `ignorePowerline` - Skip all powerline configuration (default: true)
+- `enablePowerline` - Whether to configure powerline status bar (default: true, requires ignorePowerline=false)
 - `bypassLoadingScreen` - Skip the confirmation screen on startup (default: false)
 
 **otel section:**

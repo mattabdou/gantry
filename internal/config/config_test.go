@@ -133,6 +133,14 @@ func TestGetDefaultGlobalConfigTemplate(t *testing.T) {
 		t.Error("Gantry.Username should not be empty")
 	}
 
+	if template.Gantry.IgnorePowerline == nil {
+		t.Error("Gantry.IgnorePowerline should not be nil")
+	}
+
+	if *template.Gantry.IgnorePowerline != true {
+		t.Error("Gantry.IgnorePowerline should default to true")
+	}
+
 	if template.Gantry.EnablePowerline == nil {
 		t.Error("Gantry.EnablePowerline should not be nil")
 	}

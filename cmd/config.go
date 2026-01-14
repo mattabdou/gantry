@@ -87,6 +87,11 @@ func displayConfig(cfg *config.GlobalConfig) {
 	if cfg.Gantry != nil {
 		fmt.Println("GANTRY Settings:")
 		fmt.Printf("  Username:              %s\n", cfg.Gantry.Username)
+		ignorePowerline := true
+		if cfg.Gantry.IgnorePowerline != nil {
+			ignorePowerline = *cfg.Gantry.IgnorePowerline
+		}
+		fmt.Printf("  Ignore Powerline:      %v\n", ignorePowerline)
 		enablePowerline := true
 		if cfg.Gantry.EnablePowerline != nil {
 			enablePowerline = *cfg.Gantry.EnablePowerline
@@ -310,6 +315,13 @@ func editConfig() {
 	fmt.Println()
 
 	cfg.Gantry.Username = prompt(scanner, "Your username (for telemetry attribution)", cfg.Gantry.Username)
+
+	ignorePowerline := true
+	if cfg.Gantry.IgnorePowerline != nil {
+		ignorePowerline = *cfg.Gantry.IgnorePowerline
+	}
+	newIgnorePowerline := promptBoolean(scanner, "Ignore powerline (skip all powerline configuration)?", ignorePowerline)
+	cfg.Gantry.IgnorePowerline = &newIgnorePowerline
 
 	enablePowerline := true
 	if cfg.Gantry.EnablePowerline != nil {

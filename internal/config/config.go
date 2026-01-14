@@ -147,6 +147,7 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 	return &GlobalConfig{
 		Gantry: &GantryConfig{
 			Username:            "YOUR_USERNAME_HERE",
+			IgnorePowerline:     &trueVal,
 			EnablePowerline:     &trueVal,
 			BypassLoadingScreen: &falseVal,
 		},
@@ -284,7 +285,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 	booleanKeys := map[string]bool{
 		"logUserPrompts": true, "includeSessionId": true,
 		"includeVersion": true, "includeAccountUuid": true, "enabled": true,
-		"enablePowerline": true, "bypassLoadingScreen": true,
+		"ignorePowerline": true, "enablePowerline": true, "bypassLoadingScreen": true,
 	}
 	numberKeys := map[string]bool{
 		"metricExportInterval": true, "logsExportInterval": true,

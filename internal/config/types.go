@@ -11,6 +11,7 @@ type GlobalConfig struct {
 // GantryConfig contains GANTRY-specific configuration
 type GantryConfig struct {
 	Username            string `json:"username"`
+	IgnorePowerline     *bool  `json:"ignorePowerline,omitempty"`
 	EnablePowerline     *bool  `json:"enablePowerline,omitempty"`
 	BypassLoadingScreen *bool  `json:"bypassLoadingScreen,omitempty"`
 }
