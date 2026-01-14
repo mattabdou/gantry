@@ -157,7 +157,7 @@ function Initialize-Config {
 
     Write-Host ""
     if (Test-Path $configFile) {
-        Write-Info "Configuration file already exists: $configFile"
+        Write-Info "Using existing configuration file: $configFile"
     }
     else {
         Write-Info "Initializing configuration..."

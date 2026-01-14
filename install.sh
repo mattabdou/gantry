@@ -213,7 +213,7 @@ initialize_config() {
 
     echo ""
     if [ -f "$config_file" ]; then
-        info "Configuration file already exists: $config_file"
+        info "Using existing configuration file: $config_file"
     else
         info "Initializing configuration..."
 
