@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 # Configuration
 $GithubRepo = "mattabdou/gantry"
 $BinaryName = "gantry"
-$Version = "1.0.0"
+$Version = "1.1.0"
 
 # Colors
 function Write-Info { Write-Host "[INFO] $args" -ForegroundColor Blue }
