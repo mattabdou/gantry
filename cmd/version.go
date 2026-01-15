@@ -9,7 +9,7 @@ import (
 )
 
 // Version is the current version of GANTRY
-const Version = "1.1.0"
+const Version = "1.1.1"
 
 var versionCheckUpdate bool
 
