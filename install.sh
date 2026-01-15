@@ -22,7 +22,7 @@ NC='\033[0m' # No Color
 # Configuration
 GITHUB_REPO="mattabdou/gantry"
 BINARY_NAME="gantry"
-VERSION="1.1.2"
+VERSION="1.1.3"
 
 # Print colored output
 info() {
