@@ -71,9 +71,37 @@ func BuildResourceAttributes(username, workingPath string, projectConfig *config
 	return strings.Join(attributes, ",")
 }
 
+// filterEnvVars removes specified environment variables from the environment slice
+func filterEnvVars(env []string, varsToRemove []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		keep := true
+		for _, v := range varsToRemove {
+			if strings.HasPrefix(e, v+"=") {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
 // BuildEnvironment builds environment variables for Claude Code from global config
 func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes string, mode string) []string {
 	env := os.Environ()
+
+	// When in LiteLLM mode, remove Bedrock-related environment variables
+	// that may have been set system-wide to prevent conflicts
+	if mode == "litellm" {
+		env = filterEnvVars(env, []string{
+			"CLAUDE_CODE_USE_BEDROCK",
+			"AWS_PROFILE",
+			"AWS_REGION",
+		})
+	}
 
 	// Helper to add environment variable
 	addEnv := func(key, value string) {

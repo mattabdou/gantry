@@ -318,6 +318,56 @@ func TestBuildEnvironmentLiteLLMModeSetsNoBedrockVars(t *testing.T) {
 	}
 }
 
+func TestBuildEnvironmentLiteLLMFiltersInheritedBedrockVars(t *testing.T) {
+	// Simulate system-wide Bedrock environment variables
+	os.Setenv("CLAUDE_CODE_USE_BEDROCK", "1")
+	os.Setenv("AWS_PROFILE", "system-profile")
+	os.Setenv("AWS_REGION", "us-west-2")
+	defer func() {
+		os.Unsetenv("CLAUDE_CODE_USE_BEDROCK")
+		os.Unsetenv("AWS_PROFILE")
+		os.Unsetenv("AWS_REGION")
+	}()
+
+	globalConfig := &config.GlobalConfig{
+		OTEL: config.OTELConfig{
+			Endpoint: "https://collector.example.com/otlp",
+		},
+		LiteLLM: &config.LiteLLMConfig{
+			BaseURL:   "https://litellm.example.com",
+			AuthToken: "test-token",
+		},
+	}
+
+	// In LiteLLM mode, inherited Bedrock vars should be filtered out
+	env := BuildEnvironment(globalConfig, "", "litellm")
+
+	// Convert to map for easier testing
+	envMap := make(map[string]string)
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	// Inherited Bedrock vars should be filtered out in litellm mode
+	if _, ok := envMap["CLAUDE_CODE_USE_BEDROCK"]; ok {
+		t.Error("CLAUDE_CODE_USE_BEDROCK should be filtered out in litellm mode")
+	}
+	if _, ok := envMap["AWS_PROFILE"]; ok {
+		t.Error("AWS_PROFILE should be filtered out in litellm mode")
+	}
+	if _, ok := envMap["AWS_REGION"]; ok {
+		t.Error("AWS_REGION should be filtered out in litellm mode")
+	}
+
+	// LiteLLM vars should still be set
+	if envMap["ANTHROPIC_BASE_URL"] != "https://litellm.example.com" {
+		t.Error("ANTHROPIC_BASE_URL should be set in litellm mode")
+	}
+}
+
 func TestBuildEnvironmentPreservesExisting(t *testing.T) {
 	// Set an existing env var
 	os.Setenv("TEST_EXISTING_VAR", "existing_value")
