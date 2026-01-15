@@ -159,6 +159,7 @@ function Initialize-Config {
     Write-Host ""
     if (Test-Path $configFile) {
         Write-Info "Using existing configuration file: $configFile"
+        return $true  # Config already existed
     }
     else {
         Write-Info "Initializing configuration..."
@@ -168,13 +169,15 @@ function Initialize-Config {
         if ($gantryPath) {
             & gantry init
         }
+        return $false  # Config was newly created
     }
 }
 
 function Show-PostInstallInstructions {
     param(
         [bool]$PathAdded,
-        [string]$InstallDir
+        [string]$InstallDir,
+        [bool]$ConfigExisted
     )
 
     Write-Host ""
@@ -189,26 +192,30 @@ function Show-PostInstallInstructions {
         Write-Host ""
     }
 
-    # Check for GANTRY_USERNAME
-    if (-not $env:GANTRY_USERNAME) {
-        Write-Warn "GANTRY_USERNAME environment variable is not set"
-        Write-Host ""
-        Write-Host "You must set GANTRY_USERNAME. Choose one method:"
-        Write-Host ""
-        Write-Host "  # PowerShell (current session):"
-        Write-Host '  $env:GANTRY_USERNAME = "your.username"'
-        Write-Host ""
-        Write-Host "  # PowerShell (permanent - add to $PROFILE):"
-        Write-Host '  $env:GANTRY_USERNAME = "your.username"'
-        Write-Host ""
-        Write-Host "  # System Environment Variables (permanent):"
-        Write-Host '  [Environment]::SetEnvironmentVariable("GANTRY_USERNAME", "your.username", "User")'
-        Write-Host ""
-        Write-Host "  # Or use: Settings > System > About > Advanced system settings > Environment Variables"
-        Write-Host ""
-    }
-    else {
-        Write-Success "GANTRY_USERNAME is set to: $env:GANTRY_USERNAME"
+    # Check for GANTRY_USERNAME (only for new installations)
+    # Skip this check if config already existed, as username is likely already configured
+    if (-not $ConfigExisted) {
+        if (-not $env:GANTRY_USERNAME) {
+            Write-Warn "GANTRY_USERNAME environment variable is not set"
+            Write-Host ""
+            Write-Host "You can set your username in ~/.gantryrc.json (gantry.username)"
+            Write-Host "or set GANTRY_USERNAME. Choose one method:"
+            Write-Host ""
+            Write-Host "  # PowerShell (current session):"
+            Write-Host '  $env:GANTRY_USERNAME = "your.username"'
+            Write-Host ""
+            Write-Host "  # PowerShell (permanent - add to $PROFILE):"
+            Write-Host '  $env:GANTRY_USERNAME = "your.username"'
+            Write-Host ""
+            Write-Host "  # System Environment Variables (permanent):"
+            Write-Host '  [Environment]::SetEnvironmentVariable("GANTRY_USERNAME", "your.username", "User")'
+            Write-Host ""
+            Write-Host "  # Or use: Settings > System > About > Advanced system settings > Environment Variables"
+            Write-Host ""
+        }
+        else {
+            Write-Success "GANTRY_USERNAME is set to: $env:GANTRY_USERNAME"
+        }
     }
 
     Write-Host "Next steps:"
@@ -268,10 +275,10 @@ function Main {
     }
 
     # Initialize config
-    Initialize-Config
+    $configExisted = Initialize-Config
 
     # Show instructions
-    Show-PostInstallInstructions -PathAdded $pathAdded -InstallDir $installDir
+    Show-PostInstallInstructions -PathAdded $pathAdded -InstallDir $installDir -ConfigExisted $configExisted
 }
 
 # Run main

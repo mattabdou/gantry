@@ -208,14 +208,17 @@ verify_installation() {
 }
 
 # Initialize configuration
+# Sets CONFIG_EXISTED=true if config already existed, false if newly created
 initialize_config() {
     local config_file="$HOME/.gantryrc.json"
 
     echo ""
     if [ -f "$config_file" ]; then
         info "Using existing configuration file: $config_file"
+        CONFIG_EXISTED=true
     else
         info "Initializing configuration..."
+        CONFIG_EXISTED=false
 
         # Run gantry init
         if command -v gantry &> /dev/null; then
@@ -239,20 +242,24 @@ show_instructions() {
         echo ""
     fi
 
-    # Check for GANTRY_USERNAME
-    if [ -z "$GANTRY_USERNAME" ]; then
-        warn "GANTRY_USERNAME environment variable is not set"
-        echo ""
-        echo "You must set GANTRY_USERNAME in your shell profile:"
-        echo ""
-        echo "  # For bash (~/.bashrc):"
-        echo "  export GANTRY_USERNAME=\"your.username\""
-        echo ""
-        echo "  # For zsh (~/.zshrc):"
-        echo "  export GANTRY_USERNAME=\"your.username\""
-        echo ""
-    else
-        success "GANTRY_USERNAME is set to: $GANTRY_USERNAME"
+    # Check for GANTRY_USERNAME (only for new installations)
+    # Skip this check if config already existed, as username is likely already configured
+    if [ "${CONFIG_EXISTED:-false}" = false ]; then
+        if [ -z "$GANTRY_USERNAME" ]; then
+            warn "GANTRY_USERNAME environment variable is not set"
+            echo ""
+            echo "You can set your username in ~/.gantryrc.json (gantry.username)"
+            echo "or set GANTRY_USERNAME in your shell profile:"
+            echo ""
+            echo "  # For bash (~/.bashrc):"
+            echo "  export GANTRY_USERNAME=\"your.username\""
+            echo ""
+            echo "  # For zsh (~/.zshrc):"
+            echo "  export GANTRY_USERNAME=\"your.username\""
+            echo ""
+        else
+            success "GANTRY_USERNAME is set to: $GANTRY_USERNAME"
+        fi
     fi
 
     echo "Next steps:"
