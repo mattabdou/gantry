@@ -146,11 +146,12 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 
 	return &GlobalConfig{
 		Gantry: &GantryConfig{
-			Mode:                "YOUR_MODE_HERE",
-			Username:            "YOUR_USERNAME_HERE",
-			IgnorePowerline:     &trueVal,
-			EnablePowerline:     &trueVal,
-			BypassLoadingScreen: &falseVal,
+			Mode:                   "YOUR_MODE_HERE",
+			Username:               "YOUR_USERNAME_HERE",
+			IgnorePowerline:        &trueVal,
+			EnablePowerline:        &trueVal,
+			BypassLoadingScreen:    &falseVal,
+			CheckForUpdateOnLaunch: &trueVal,
 		},
 		OTEL: OTELConfig{
 			Endpoint:             "https://your-otel-collector.example.com/otlp",
@@ -293,6 +294,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 		"logUserPrompts": true, "includeSessionId": true,
 		"includeVersion": true, "includeAccountUuid": true,
 		"ignorePowerline": true, "enablePowerline": true, "bypassLoadingScreen": true,
+		"checkForUpdateOnLaunch": true,
 	}
 	numberKeys := map[string]bool{
 		"metricExportInterval": true, "logsExportInterval": true,

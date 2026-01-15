@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/launcher"
 	"github.com/mattabdou/gantry/internal/powerline"
+	"github.com/mattabdou/gantry/internal/updater"
 	"github.com/spf13/cobra"
 )
 
@@ -252,77 +254,105 @@ func runGantry(cmd *cobra.Command, args []string) {
 		bypassLoadingScreen = *globalConfig.Gantry.BypassLoadingScreen
 	}
 
+	// Check for updates if enabled (defaults to true) and 6+ hours since last check
+	var updateAvailable bool
+	var latestVersion string
+	if shouldCheckForUpdate(globalConfig.Gantry) {
+		result := updater.CheckForUpdate(Version)
+		if result.Error == nil {
+			updateAvailable = result.UpdateAvailable
+			latestVersion = result.LatestVersion
+			// Save the check timestamp and result to config
+			saveUpdateCheckResult(globalConfig, latestVersion)
+		}
+	} else {
+		// Use cached result if available
+		if globalConfig.Gantry != nil && globalConfig.Gantry.LastUpdateResult != "" {
+			latestVersion = globalConfig.Gantry.LastUpdateResult
+			if updater.CompareVersions(Version, latestVersion) < 0 {
+				updateAvailable = true
+			}
+		}
+	}
+
 	// ============================================
 	// PHASE 2: Show confirmation screen (if enabled)
 	// ============================================
 
 	if !bypassLoadingScreen {
 		fmt.Println()
-		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║              GANTRY - Claude Code Launcher                       ║")
-		fmt.Printf("║              Version: %-43s ║\n", Version)
-		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
-		fmt.Println("║  The following configuration will be applied:                    ║")
-		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
+		fmt.Println("╔════════════════════════════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║                    GANTRY - Claude Code Launcher                                       ║")
+		fmt.Printf("║                    Version: %-59s ║\n", Version)
+		// Show update notification if available
+		if updateAvailable {
+			fmt.Println("║                                                                                        ║")
+			fmt.Println("║                    *** UPDATE AVAILABLE ***                                            ║")
+			fmt.Printf("║                    Version %-61s ║\n", latestVersion+" is available")
+			fmt.Println("║                    Run 'gantry update' to install                                      ║")
+		}
+		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
+		fmt.Println("║  The following configuration will be applied:                                          ║")
+		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
 
 		// User info
-		fmt.Println("║  USER IDENTITY                                                   ║")
+		fmt.Println("║  USER IDENTITY                                                                         ║")
 		if usernameSource == "env" {
-			fmt.Printf("║    Username:        %-44s ║\n", truncateString(username, 44)+" (env override)")
+			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username, 64)+" (env override)")
 		} else {
-			fmt.Printf("║    Username:        %-44s ║\n", truncateString(username, 44))
+			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username, 64))
 		}
-		fmt.Println("║                                                                  ║")
+		fmt.Println("║                                                                                        ║")
 
 		// Project info
-		fmt.Println("║  PROJECT                                                         ║")
-		fmt.Printf("║    Project Name:    %-44s ║\n", truncateString(projectConfig.Config.ProjectName, 44))
+		fmt.Println("║  PROJECT                                                                               ║")
+		fmt.Printf("║    Project Name:    %-64s ║\n", truncateString(projectConfig.Config.ProjectName, 64))
 		if projectConfig.Path != "" {
-			fmt.Printf("║    Config File:     %-44s ║\n", truncateString(projectConfig.Path, 44))
+			fmt.Printf("║    Config File:     %-64s ║\n", truncateString(projectConfig.Path, 64))
 		} else {
-			fmt.Printf("║    Config File:     %-44s ║\n", "(none - using defaults)")
+			fmt.Printf("║    Config File:     %-64s ║\n", "(none - using defaults)")
 		}
 		if gitBranch != "" {
-			fmt.Printf("║    Git Branch:      %-44s ║\n", truncateString(gitBranch, 44))
+			fmt.Printf("║    Git Branch:      %-64s ║\n", truncateString(gitBranch, 64))
 		}
-		fmt.Println("║                                                                  ║")
+		fmt.Println("║                                                                                        ║")
 
 		// OTEL info
-		fmt.Println("║  TELEMETRY (OTEL)                                                ║")
-		fmt.Printf("║    Endpoint:        %-44s ║\n", truncateString(globalConfig.OTEL.Endpoint, 44))
-		fmt.Println("║                                                                  ║")
+		fmt.Println("║  TELEMETRY (OTEL)                                                                      ║")
+		fmt.Printf("║    Endpoint:        %-64s ║\n", truncateString(globalConfig.OTEL.Endpoint, 64))
+		fmt.Println("║                                                                                        ║")
 
 		// Provider info (Bedrock or LiteLLM based on mode)
 		if mode == "bedrock" {
-			fmt.Println("║  AWS BEDROCK                                                     ║")
+			fmt.Println("║  AWS BEDROCK                                                                           ║")
 			if modeSource == "flag" {
-				fmt.Printf("║    Mode:            %-44s ║\n", "bedrock (from --mode flag)")
+				fmt.Printf("║    Mode:            %-64s ║\n", "bedrock (from --mode flag)")
 			} else {
-				fmt.Printf("║    Mode:            %-44s ║\n", "bedrock (from config)")
+				fmt.Printf("║    Mode:            %-64s ║\n", "bedrock (from config)")
 			}
-			fmt.Printf("║    AWS Profile:     %-44s ║\n", truncateString(globalConfig.Bedrock.AWSProfile, 44))
-			fmt.Printf("║    Region:          %-44s ║\n", globalConfig.Bedrock.AWSRegion)
-			fmt.Printf("║    Model:           %-44s ║\n", truncateString(globalConfig.Bedrock.Model, 44))
+			fmt.Printf("║    AWS Profile:     %-64s ║\n", truncateString(globalConfig.Bedrock.AWSProfile, 64))
+			fmt.Printf("║    Region:          %-64s ║\n", globalConfig.Bedrock.AWSRegion)
+			fmt.Printf("║    Model:           %-64s ║\n", truncateString(globalConfig.Bedrock.Model, 64))
 		} else {
-			fmt.Println("║  LITELLM                                                         ║")
+			fmt.Println("║  LITELLM                                                                               ║")
 			if modeSource == "flag" {
-				fmt.Printf("║    Mode:            %-44s ║\n", "litellm (from --mode flag)")
+				fmt.Printf("║    Mode:            %-64s ║\n", "litellm (from --mode flag)")
 			} else {
-				fmt.Printf("║    Mode:            %-44s ║\n", "litellm (from config)")
+				fmt.Printf("║    Mode:            %-64s ║\n", "litellm (from config)")
 			}
-			fmt.Printf("║    Base URL:        %-44s ║\n", truncateString(globalConfig.LiteLLM.BaseURL, 44))
-			fmt.Printf("║    Model:           %-44s ║\n", truncateString(globalConfig.LiteLLM.Model, 44))
+			fmt.Printf("║    Base URL:        %-64s ║\n", truncateString(globalConfig.LiteLLM.BaseURL, 64))
+			fmt.Printf("║    Model:           %-64s ║\n", truncateString(globalConfig.LiteLLM.Model, 64))
 		}
-		fmt.Println("║                                                                  ║")
+		fmt.Println("║                                                                                        ║")
 
 		// Powerline info
-		fmt.Println("║  POWERLINE STATUS BAR                                            ║")
-		fmt.Printf("║    Action:          %-44s ║\n", truncateString(powerlineAction, 44))
-		fmt.Println("║                                                                  ║")
+		fmt.Println("║  POWERLINE STATUS BAR                                                                  ║")
+		fmt.Printf("║    Action:          %-64s ║\n", truncateString(powerlineAction, 64))
+		fmt.Println("║                                                                                        ║")
 
-		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
-		fmt.Println("║  Press ENTER to continue, or 'q' to cancel...                    ║")
-		fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
+		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
+		fmt.Println("║  Press ENTER to continue, or 'q' to cancel...                                          ║")
+		fmt.Println("╚════════════════════════════════════════════════════════════════════════════════════════╝")
 
 		// Wait for user input
 		reader := bufio.NewReader(os.Stdin)
@@ -463,4 +493,41 @@ Examples:
 
 For more information, see: https://github.com/mattabdou/gantry
 `, Version)
+}
+
+// shouldCheckForUpdate determines if we should perform an update check
+// Returns true if checkForUpdateOnLaunch is enabled (or not set, defaults to true)
+// AND more than 6 hours have passed since the last check
+func shouldCheckForUpdate(gantryConfig *config.GantryConfig) bool {
+	if gantryConfig == nil {
+		return true // Default to checking
+	}
+
+	// Check if feature is disabled
+	if gantryConfig.CheckForUpdateOnLaunch != nil && !*gantryConfig.CheckForUpdateOnLaunch {
+		return false
+	}
+
+	// Check if 6 hours have passed since last check
+	if gantryConfig.LastUpdateCheck != "" {
+		lastCheck, err := time.Parse(time.RFC3339, gantryConfig.LastUpdateCheck)
+		if err == nil && time.Since(lastCheck) < 6*time.Hour {
+			return false // Use cached result
+		}
+	}
+
+	return true
+}
+
+// saveUpdateCheckResult saves the update check timestamp and result to the config file
+func saveUpdateCheckResult(globalConfig *config.GlobalConfig, latestVersion string) {
+	if globalConfig.Gantry == nil {
+		globalConfig.Gantry = &config.GantryConfig{}
+	}
+
+	globalConfig.Gantry.LastUpdateCheck = time.Now().Format(time.RFC3339)
+	globalConfig.Gantry.LastUpdateResult = latestVersion
+
+	// Save to config file (ignore errors - this is non-critical)
+	_ = config.SaveGlobalConfig(globalConfig)
 }

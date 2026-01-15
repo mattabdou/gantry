@@ -124,7 +124,8 @@ At minimum, you need to configure:
     "username": "your.username",
     "ignorePowerline": true,
     "enablePowerline": true,
-    "bypassLoadingScreen": false
+    "bypassLoadingScreen": false,
+    "checkForUpdateOnLaunch": true
   },
   "otel": {
     "endpoint": "https://your-otel-collector.example.com/otlp",
@@ -386,6 +387,7 @@ Use dot notation for nested values:
 | `gantry.ignorePowerline` | boolean | Skip all powerline configuration (default: true) |
 | `gantry.enablePowerline` | boolean | Enable powerline status bar (requires ignorePowerline=false) |
 | `gantry.bypassLoadingScreen` | boolean | Skip confirmation screen on startup |
+| `gantry.checkForUpdateOnLaunch` | boolean | Check for updates on startup (default: true) |
 | `bedrock.awsProfile` | string | AWS profile name |
 | `bedrock.awsRegion` | string | AWS region |
 | `bedrock.model` | string | Anthropic model ID |
