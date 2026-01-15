@@ -476,7 +476,7 @@ func editConfig() {
 
 	litellmModel := cfg.LiteLLM.Model
 	if litellmModel == "" {
-		litellmModel = "claude-opus-4-5-20251101"
+		litellmModel = "us.anthropic.claude-opus-4-5-20251101-v1:0"
 	}
 	cfg.LiteLLM.Model = prompt(scanner, "Anthropic Model", litellmModel)
 

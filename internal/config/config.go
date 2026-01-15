@@ -175,7 +175,7 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 		LiteLLM: &LiteLLMConfig{
 			BaseURL:           "https://your-litellm-proxy.example.com",
 			AuthToken:         "YOUR_AUTH_TOKEN_HERE",
-			Model:             "claude-opus-4-5-20251101",
+			Model:             "us.anthropic.claude-opus-4-5-20251101-v1:0",
 			MaxOutputTokens:   8192,
 			MaxThinkingTokens: 1024,
 		},

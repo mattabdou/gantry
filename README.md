@@ -149,7 +149,7 @@ At minimum, you need to configure:
   "litellm": {
     "baseUrl": "https://your-litellm-proxy.example.com",
     "authToken": "YOUR_AUTH_TOKEN",
-    "model": "claude-opus-4-5-20251101",
+    "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
     "maxOutputTokens": 8192,
     "maxThinkingTokens": 1024
   }
@@ -201,7 +201,7 @@ Used when `mode` is set to `litellm`.
 |-------|-------------|---------|
 | `baseUrl` | LiteLLM proxy base URL | *Required* |
 | `authToken` | Authentication token for LiteLLM | *Required* |
-| `model` | Model name | `claude-opus-4-5-20251101` |
+| `model` | Model name | `us.anthropic.claude-opus-4-5-20251101-v1:0` |
 | `maxOutputTokens` | Maximum output tokens | `8192` |
 | `maxThinkingTokens` | Maximum thinking tokens | `1024` |
 
