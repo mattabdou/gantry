@@ -167,7 +167,7 @@ function Initialize-Config {
         # Run gantry init
         $gantryPath = Get-Command gantry -ErrorAction SilentlyContinue
         if ($gantryPath) {
-            & gantry init
+            & gantry init | Out-Null
         }
         return $false  # Config was newly created
     }
