@@ -283,12 +283,12 @@ func runGantry(cmd *cobra.Command, args []string) {
 		fmt.Println()
 		fmt.Println("╔════════════════════════════════════════════════════════════════════════════════════════╗")
 		fmt.Println("║                    GANTRY - Claude Code Launcher                                       ║")
-		fmt.Printf("║                    Version: %-59s ║\n", Version)
+		fmt.Println(boxLine("║                    Version: ", Version))
 		// Show update notification if available
 		if updateAvailable {
 			fmt.Println("║                                                                                        ║")
 			fmt.Println("║                    *** UPDATE AVAILABLE ***                                            ║")
-			fmt.Printf("║                    Version %-61s ║\n", truncateString(latestVersion+" is available", 61))
+			fmt.Println(boxLine("║                    Version ", latestVersion+" is available"))
 			fmt.Println("║                    Run 'gantry update' to install                                      ║")
 		}
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
@@ -298,56 +298,56 @@ func runGantry(cmd *cobra.Command, args []string) {
 		// User info
 		fmt.Println("║  USER IDENTITY                                                                         ║")
 		if usernameSource == "env" {
-			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username+" (env override)", 64))
+			fmt.Println(boxLine("║    Username:        ", username+" (env override)"))
 		} else {
-			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username, 64))
+			fmt.Println(boxLine("║    Username:        ", username))
 		}
 		fmt.Println("║                                                                                        ║")
 
 		// Project info
 		fmt.Println("║  PROJECT                                                                               ║")
-		fmt.Printf("║    Project Name:    %-64s ║\n", truncateString(projectConfig.Config.ProjectName, 64))
+		fmt.Println(boxLine("║    Project Name:    ", projectConfig.Config.ProjectName))
 		if projectConfig.Path != "" {
-			fmt.Printf("║    Config File:     %-64s ║\n", truncateString(projectConfig.Path, 64))
+			fmt.Println(boxLine("║    Config File:     ", projectConfig.Path))
 		} else {
-			fmt.Printf("║    Config File:     %-64s ║\n", "(none - using defaults)")
+			fmt.Println(boxLine("║    Config File:     ", "(none - using defaults)"))
 		}
 		if gitBranch != "" {
-			fmt.Printf("║    Git Branch:      %-64s ║\n", truncateString(gitBranch, 64))
+			fmt.Println(boxLine("║    Git Branch:      ", gitBranch))
 		}
 		fmt.Println("║                                                                                        ║")
 
 		// OTEL info
 		fmt.Println("║  TELEMETRY (OTEL)                                                                      ║")
-		fmt.Printf("║    Endpoint:        %-64s ║\n", truncateString(globalConfig.OTEL.Endpoint, 64))
+		fmt.Println(boxLine("║    Endpoint:        ", globalConfig.OTEL.Endpoint))
 		fmt.Println("║                                                                                        ║")
 
 		// Provider info (Bedrock or LiteLLM based on mode)
 		if mode == "bedrock" {
 			fmt.Println("║  AWS BEDROCK                                                                           ║")
 			if modeSource == "flag" {
-				fmt.Printf("║    Mode:            %-64s ║\n", "bedrock (from --mode flag)")
+				fmt.Println(boxLine("║    Mode:            ", "bedrock (from --mode flag)"))
 			} else {
-				fmt.Printf("║    Mode:            %-64s ║\n", "bedrock (from config)")
+				fmt.Println(boxLine("║    Mode:            ", "bedrock (from config)"))
 			}
-			fmt.Printf("║    AWS Profile:     %-64s ║\n", truncateString(globalConfig.Bedrock.AWSProfile, 64))
-			fmt.Printf("║    Region:          %-64s ║\n", globalConfig.Bedrock.AWSRegion)
-			fmt.Printf("║    Model:           %-64s ║\n", truncateString(globalConfig.Bedrock.Model, 64))
+			fmt.Println(boxLine("║    AWS Profile:     ", globalConfig.Bedrock.AWSProfile))
+			fmt.Println(boxLine("║    Region:          ", globalConfig.Bedrock.AWSRegion))
+			fmt.Println(boxLine("║    Model:           ", globalConfig.Bedrock.Model))
 		} else {
 			fmt.Println("║  LITELLM                                                                               ║")
 			if modeSource == "flag" {
-				fmt.Printf("║    Mode:            %-64s ║\n", "litellm (from --mode flag)")
+				fmt.Println(boxLine("║    Mode:            ", "litellm (from --mode flag)"))
 			} else {
-				fmt.Printf("║    Mode:            %-64s ║\n", "litellm (from config)")
+				fmt.Println(boxLine("║    Mode:            ", "litellm (from config)"))
 			}
-			fmt.Printf("║    Base URL:        %-64s ║\n", truncateString(globalConfig.LiteLLM.BaseURL, 64))
-			fmt.Printf("║    Model:           %-64s ║\n", truncateString(globalConfig.LiteLLM.Model, 64))
+			fmt.Println(boxLine("║    Base URL:        ", globalConfig.LiteLLM.BaseURL))
+			fmt.Println(boxLine("║    Model:           ", globalConfig.LiteLLM.Model))
 		}
 		fmt.Println("║                                                                                        ║")
 
 		// Powerline info
 		fmt.Println("║  POWERLINE STATUS BAR                                                                  ║")
-		fmt.Printf("║    Action:          %-64s ║\n", truncateString(powerlineAction, 64))
+		fmt.Println(boxLine("║    Action:          ", powerlineAction))
 		fmt.Println("║                                                                                        ║")
 
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
@@ -436,6 +436,33 @@ func truncateString(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// boxLine formats a line for the confirmation screen box with consistent width (90 chars total)
+// prefix is the text before the value (e.g., "║    Username:        ")
+// value is the dynamic content to display
+// The function pads or truncates the value to ensure the line is exactly 90 characters
+func boxLine(prefix, value string) string {
+	const totalWidth = 90
+	const suffix = " ║"
+
+	// Calculate available space for value
+	prefixLen := len([]rune(prefix))
+	suffixLen := len([]rune(suffix))
+	valueWidth := totalWidth - prefixLen - suffixLen
+
+	// Truncate value if too long
+	valueRunes := []rune(value)
+	if len(valueRunes) > valueWidth {
+		if valueWidth > 3 {
+			value = string(valueRunes[:valueWidth-3]) + "..."
+		} else {
+			value = string(valueRunes[:valueWidth])
+		}
+	}
+
+	// Pad value if too short
+	return fmt.Sprintf("%s%-*s%s", prefix, valueWidth, value, suffix)
 }
 
 func showHelp() {
