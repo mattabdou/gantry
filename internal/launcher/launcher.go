@@ -16,8 +16,17 @@ func IsWindows() bool {
 }
 
 // GetClaudeCommand returns the appropriate Claude command for the current OS
+// On Windows, it tries multiple executable names and returns the first one found
 func GetClaudeCommand() string {
 	if IsWindows() {
+		// Try multiple possible executable names on Windows
+		candidates := []string{"claude.cmd", "claude.exe", "claude"}
+		for _, candidate := range candidates {
+			if _, err := exec.LookPath(candidate); err == nil {
+				return candidate
+			}
+		}
+		// Default to claude.cmd if none found (will produce a clear error)
 		return "claude.cmd"
 	}
 	return "claude"

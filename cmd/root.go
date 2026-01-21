@@ -288,7 +288,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 		if updateAvailable {
 			fmt.Println("║                                                                                        ║")
 			fmt.Println("║                    *** UPDATE AVAILABLE ***                                            ║")
-			fmt.Printf("║                    Version %-61s ║\n", latestVersion+" is available")
+			fmt.Printf("║                    Version %-61s ║\n", truncateString(latestVersion+" is available", 61))
 			fmt.Println("║                    Run 'gantry update' to install                                      ║")
 		}
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
@@ -298,7 +298,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 		// User info
 		fmt.Println("║  USER IDENTITY                                                                         ║")
 		if usernameSource == "env" {
-			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username, 64)+" (env override)")
+			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username+" (env override)", 64))
 		} else {
 			fmt.Printf("║    Username:        %-64s ║\n", truncateString(username, 64))
 		}

@@ -22,8 +22,10 @@ func TestGetClaudeCommand(t *testing.T) {
 	got := GetClaudeCommand()
 
 	if IsWindows() {
-		if got != "claude.cmd" {
-			t.Errorf("GetClaudeCommand() = %v, want claude.cmd", got)
+		// On Windows, should return one of the valid candidates
+		validCandidates := map[string]bool{"claude.cmd": true, "claude.exe": true, "claude": true}
+		if !validCandidates[got] {
+			t.Errorf("GetClaudeCommand() = %v, want one of claude.cmd, claude.exe, or claude", got)
 		}
 	} else {
 		if got != "claude" {
