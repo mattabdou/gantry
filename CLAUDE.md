@@ -123,4 +123,32 @@ make test-coverage  # Generates coverage.html
 
 ## Version
 
-Current version is defined in `cmd/version.go:Version` constant (currently "1.0.0").
+Current version is defined in two places (both must be updated for releases):
+- `cmd/version.go:Version` constant
+- `Makefile:VERSION` variable
+
+## Creating Releases
+
+When creating a new release:
+
+1. **Update version** in both `cmd/version.go` and `Makefile`
+2. **Build binaries**: Run `make clean && make release`
+3. **Create GitHub release** with `gh release create vX.Y.Z` including:
+
+**Versioned archives** (for manual installation):
+- `gantry-X.Y.Z-darwin-amd64.tar.gz`
+- `gantry-X.Y.Z-darwin-arm64.tar.gz`
+- `gantry-X.Y.Z-linux-amd64.tar.gz`
+- `gantry-X.Y.Z-linux-arm64.tar.gz`
+- `gantry-X.Y.Z-windows-amd64.zip`
+- `gantry-X.Y.Z-windows-arm64.zip`
+
+**Raw binaries** (required for `gantry update` self-updater):
+- `gantry-darwin-amd64`
+- `gantry-darwin-arm64`
+- `gantry-linux-amd64`
+- `gantry-linux-arm64`
+- `gantry-windows-amd64.exe`
+- `gantry-windows-arm64.exe`
+
+**Important**: The raw binaries (without version in filename) are required because the self-updater in `internal/updater/updater.go` looks for assets matching the pattern `gantry-{os}-{arch}[.exe]`.
