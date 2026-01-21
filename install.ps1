@@ -263,14 +263,9 @@ function Main {
         $pathAdded = Add-ToUserPath $installDir
     }
 
-    # Verify installation
-    $installedGantry = Get-Command gantry -ErrorAction SilentlyContinue
-    if ($installedGantry) {
-        $version = & gantry --version 2>&1
-        Write-Success "Verified: $version"
-    }
-    else {
-        Write-Success "Installed to: $binaryPath"
+    # Show installation result
+    Write-Success "Installed to: $binaryPath"
+    if ($pathAdded -or -not (Test-InPath $installDir)) {
         Write-Warn "Restart your terminal to use 'gantry' command"
     }
 
