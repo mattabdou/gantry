@@ -22,7 +22,6 @@ NC='\033[0m' # No Color
 # Configuration
 GITHUB_REPO="mattabdou/gantry"
 BINARY_NAME="gantry"
-VERSION="1.1.3"
 
 # Print colored output
 info() {
@@ -40,6 +39,24 @@ warn() {
 error() {
     echo -e "${RED}[ERROR]${NC} $1"
     exit 1
+}
+
+# Fetch latest version from GitHub API
+fetch_latest_version() {
+    local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+    local version=""
+
+    if command -v curl &> /dev/null; then
+        version=$(curl -fsSL "$api_url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"tag_name": *"v?([^"]+)".*/\1/')
+    elif command -v wget &> /dev/null; then
+        version=$(wget -qO- "$api_url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"tag_name": *"v?([^"]+)".*/\1/')
+    fi
+
+    if [ -z "$version" ]; then
+        error "Could not fetch latest version from GitHub. Please check your internet connection."
+    fi
+
+    echo "$version"
 }
 
 # Detect OS
@@ -286,6 +303,10 @@ main() {
     detect_os
     detect_arch
     info "Detected: ${OS}/${ARCH}"
+
+    info "Fetching latest version..."
+    VERSION=$(fetch_latest_version)
+    info "Latest version: ${VERSION}"
 
     determine_install_dir
     info "Install directory: ${INSTALL_DIR}"

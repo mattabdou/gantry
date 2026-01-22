@@ -26,13 +26,24 @@ $ErrorActionPreference = 'Stop'
 # Configuration
 $GithubRepo = "mattabdou/gantry"
 $BinaryName = "gantry"
-$Version = "1.1.3"
 
 # Colors
 function Write-Info { Write-Host "[INFO] $args" -ForegroundColor Blue }
 function Write-Success { Write-Host "[SUCCESS] $args" -ForegroundColor Green }
 function Write-Warn { Write-Host "[WARN] $args" -ForegroundColor Yellow }
 function Write-Error { Write-Host "[ERROR] $args" -ForegroundColor Red }
+
+function Get-LatestVersion {
+    $apiUrl = "https://api.github.com/repos/$GithubRepo/releases/latest"
+    try {
+        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing
+        $version = $release.tag_name -replace '^v', ''
+        return $version
+    }
+    catch {
+        throw "Could not fetch latest version from GitHub. Please check your internet connection. Error: $_"
+    }
+}
 
 function Get-Architecture {
     # Use PROCESSOR_ARCHITECTURE env var for maximum compatibility
@@ -241,6 +252,11 @@ function Main {
     # Detect architecture
     $arch = Get-Architecture
     Write-Info "Detected architecture: $arch"
+
+    # Fetch latest version
+    Write-Info "Fetching latest version..."
+    $script:Version = Get-LatestVersion
+    Write-Info "Latest version: $Version"
 
     # Determine install directory
     $installDir = Get-InstallDirectory
