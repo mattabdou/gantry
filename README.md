@@ -1,10 +1,10 @@
-# GANTRY - Gateway for AI Navigation, Telemetry, and Runtime Yield
+# gantry
 
 A launcher for Claude Code that configures environment and telemetry.
 
 ## Overview
 
-GANTRY automatically configures Claude Code with:
+gantry automatically configures Claude Code with:
 
 - **Multiple Providers** - Support for AWS Bedrock or LiteLLM proxy
 - **Telemetry** - OpenTelemetry attributes for AI cost tracking
@@ -97,7 +97,7 @@ make build-all
 
 ## Setup
 
-### 1. Initialize GANTRY
+### 1. Initialize gantry
 
 Run the init command to create the global configuration file:
 
@@ -186,7 +186,7 @@ Used when `mode` is set to `bedrock`.
 | `maxOutputTokens` | Maximum output tokens | `8192` |
 | `maxThinkingTokens` | Maximum thinking tokens | `1024` |
 
-When in Bedrock mode, GANTRY sets the following environment variables:
+When in Bedrock mode, gantry sets the following environment variables:
 - `CLAUDE_CODE_USE_BEDROCK=1`
 - `AWS_PROFILE`
 - `AWS_REGION`
@@ -206,7 +206,7 @@ Used when `mode` is set to `litellm`.
 | `maxOutputTokens` | Maximum output tokens | `8192` |
 | `maxThinkingTokens` | Maximum thinking tokens | `1024` |
 
-When in LiteLLM mode, GANTRY sets the following environment variables:
+When in LiteLLM mode, gantry sets the following environment variables:
 - `ANTHROPIC_BASE_URL`
 - `ANTHROPIC_AUTH_TOKEN`
 - `ANTHROPIC_MODEL`
@@ -249,14 +249,14 @@ Create a `.gantry.json` file in your project root:
 | `team` | Team name | No |
 | `costCenter` | Cost center code | No |
 
-GANTRY searches for `.gantry.json` starting from the current directory and walking up parent directories (like git does with `.git`). If no config is found, `projectName` defaults to `"Unknown"`.
+gantry searches for `.gantry.json` starting from the current directory and walking up parent directories (like git does with `.git`). If no config is found, `projectName` defaults to `"Unknown"`.
 
 ## Usage
 
 Instead of running `claude`, run `gantry`:
 
 ```bash
-# Start Claude Code with GANTRY configuration (uses mode from config)
+# Start Claude Code with gantry configuration (uses mode from config)
 gantry
 
 # Override the provider mode from command line
@@ -267,7 +267,7 @@ gantry -m bedrock        # Short form
 # Pass arguments through to Claude Code
 gantry /path/to/file
 
-# GANTRY commands
+# gantry commands
 gantry init           # Create global config
 gantry init --force   # Recreate global config
 gantry config         # Interactive configuration editor
@@ -275,8 +275,8 @@ gantry config show    # Display current configuration
 gantry update         # Update gantry to latest version
 gantry update --check # Check for updates
 gantry version        # Show version info
-gantry --help         # Show GANTRY help
-gantry --version      # Show GANTRY version
+gantry --help         # Show gantry help
+gantry --version      # Show gantry version
 ```
 
 ## Confirmation Screen
@@ -285,7 +285,7 @@ When you run `gantry`, it displays a confirmation screen showing all the configu
 
 ```
 ╔══════════════════════════════════════════════════════════════════╗
-║              GANTRY - Claude Code Launcher                       ║
+║              gantry - Claude Code Launcher                       ║
 ║              Version: 1.0.0                                      ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  The following configuration will be applied:                    ║
@@ -339,11 +339,11 @@ Or use the command line:
 gantry config set gantry.bypassLoadingScreen true
 ```
 
-When bypassed, GANTRY will show minimal output (project config path and git branch) before launching Claude Code.
+When bypassed, gantry will show minimal output (project config path and git branch) before launching Claude Code.
 
 ## Configuration Management
 
-GANTRY provides an interactive configuration editor and command-line tools for managing your settings.
+gantry provides an interactive configuration editor and command-line tools for managing your settings.
 
 ### Interactive Editor
 
@@ -414,11 +414,11 @@ Use dot notation for nested values:
 
 ## Telemetry Attributes
 
-GANTRY adds the following resource attributes to OTEL telemetry:
+gantry adds the following resource attributes to OTEL telemetry:
 
 | Attribute | Source | Example |
 |-----------|--------|---------|
-| `gantry.username` | `gantry.username` config (or `GANTRY_USERNAME` env override) | `john.doe` |
+| `gantry.username` | `gantry.username` config (or `gantry_USERNAME` env override) | `john.doe` |
 | `gantry.working_path` | Current working directory | `/home/user/projects/api` |
 | `gantry.project_name` | `.gantry.json` or `"Unknown"` | `billing-api` |
 | `gantry.repository` | `.gantry.json` | `github.com/your-org/billing-api` |
@@ -463,11 +463,11 @@ sum by (gantry_cost_center) (claude_code_tokens_total)
 {service_name="claude-code"} | gantry_git_branch=~".*JIRA-123.*"
 ```
 
-## Updating GANTRY
+## Updating gantry
 
 ### Self-Update
 
-GANTRY can update itself to the latest version:
+gantry can update itself to the latest version:
 
 ```bash
 # Update to latest version
@@ -489,9 +489,9 @@ gantry version --check
 
 ## claude-powerline Integration
 
-GANTRY can optionally configure [claude-powerline](https://github.com/Owloops/claude-powerline), which provides a helpful status line at the bottom of Claude Code showing context about your session.
+gantry can optionally configure [claude-powerline](https://github.com/Owloops/claude-powerline), which provides a helpful status line at the bottom of Claude Code showing context about your session.
 
-By default, GANTRY does not modify powerline settings (`ignorePowerline: true`). To enable powerline configuration, set `ignorePowerline` to `false`.
+By default, gantry does not modify powerline settings (`ignorePowerline: true`). To enable powerline configuration, set `ignorePowerline` to `false`.
 
 ### Configuration
 
@@ -533,7 +533,7 @@ When you run `gantry` with `ignorePowerline: false`, it:
 3. Updates `~/.claude/settings.json` with the correct statusLine configuration
 4. Claude Code then uses these settings to display the powerline
 
-If `ignorePowerline` is `true` (the default), GANTRY will not modify `~/.claude/settings.json` at all.
+If `ignorePowerline` is `true` (the default), gantry will not modify `~/.claude/settings.json` at all.
 
 ## Troubleshooting
 
@@ -541,7 +541,7 @@ If `ignorePowerline` is `true` (the default), GANTRY will not modify `~/.claude/
 
 Edit `~/.gantryrc.json` and set your username in the `gantry` section, or run `gantry config` to configure interactively.
 
-### "GANTRY is not configured"
+### "gantry is not configured"
 
 Run `gantry init` to create the configuration file, then edit `~/.gantryrc.json` with your OTEL collector details.
 
@@ -577,11 +577,11 @@ For more details, see the [Claude Code setup guide](https://code.claude.com/docs
 
 ### No project config found
 
-This is normal - GANTRY will use `"Unknown"` as the project name. To enable project tracking, create a `.gantry.json` file in your project root.
+This is normal - gantry will use `"Unknown"` as the project name. To enable project tracking, create a `.gantry.json` file in your project root.
 
 ## Platform Support
 
-GANTRY provides pre-built binaries for:
+gantry provides pre-built binaries for:
 
 | Platform | Architectures |
 |----------|---------------|
