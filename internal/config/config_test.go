@@ -171,19 +171,61 @@ func TestGetDefaultGlobalConfigTemplate(t *testing.T) {
 }
 
 func TestGetDefaultProjectConfig(t *testing.T) {
-	result := GetDefaultProjectConfig()
+	// Test without .git folder - should use directory name
+	t.Run("no git folder uses directory name", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-no-git")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpDir)
 
-	if result == nil {
-		t.Fatal("GetDefaultProjectConfig() returned nil")
-	}
+		result := GetDefaultProjectConfig(tmpDir)
 
-	if result.Config.ProjectName != "Unknown" {
-		t.Errorf("ProjectName = %v, want %v", result.Config.ProjectName, "Unknown")
-	}
+		if result == nil {
+			t.Fatal("GetDefaultProjectConfig() returned nil")
+		}
 
-	if result.Path != "" {
-		t.Errorf("Path should be empty, got %v", result.Path)
-	}
+		expectedName := filepath.Base(tmpDir)
+		if result.Config.ProjectName != expectedName {
+			t.Errorf("ProjectName = %v, want %v", result.Config.ProjectName, expectedName)
+		}
+
+		if result.Path != "" {
+			t.Errorf("Path should be empty, got %v", result.Path)
+		}
+	})
+
+	// Test with .git folder - should use git root directory name
+	t.Run("with git folder uses git root name", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-with-git")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create .git folder at root
+		gitDir := filepath.Join(tmpDir, ".git")
+		if err := os.Mkdir(gitDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a subdirectory to test from
+		subDir := filepath.Join(tmpDir, "src", "components")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		result := GetDefaultProjectConfig(subDir)
+
+		if result == nil {
+			t.Fatal("GetDefaultProjectConfig() returned nil")
+		}
+
+		expectedName := filepath.Base(tmpDir)
+		if result.Config.ProjectName != expectedName {
+			t.Errorf("ProjectName = %v, want %v", result.Config.ProjectName, expectedName)
+		}
+	})
 }
 
 func TestFindProjectConfig(t *testing.T) {

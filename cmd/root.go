@@ -209,7 +209,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	// Find project config (walk up directories like git)
 	projectConfig := config.FindProjectConfig(workingPath)
 	if projectConfig == nil {
-		projectConfig = config.GetDefaultProjectConfig()
+		projectConfig = config.GetDefaultProjectConfig(workingPath)
 	}
 
 	// Get git branch
@@ -282,7 +282,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if !bypassLoadingScreen {
 		fmt.Println()
 		fmt.Println("╔════════════════════════════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║                    GANTRY - Claude Code Launcher                                       ║")
+		fmt.Println("║                    gantry - Claude Code Launcher                                       ║")
 		fmt.Println(boxLine("║                    Version: ", Version))
 		// Show update notification if available
 		if updateAvailable {

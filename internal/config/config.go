@@ -131,12 +131,43 @@ func FindProjectConfig(startDir string) *ProjectConfigResult {
 }
 
 // GetDefaultProjectConfig returns default project config when .gantry.json is not found
-func GetDefaultProjectConfig() *ProjectConfigResult {
+// It walks up directories looking for a .git folder to determine the project name.
+// If no .git folder is found, it uses the starting directory name.
+func GetDefaultProjectConfig(startDir string) *ProjectConfigResult {
+	projectName := findProjectNameFromGit(startDir)
 	return &ProjectConfigResult{
 		Config: ProjectConfig{
-			ProjectName: "Unknown",
+			ProjectName: projectName,
 		},
 	}
+}
+
+// findProjectNameFromGit walks up directories looking for a .git folder
+// and returns the name of the directory containing it.
+// If no .git folder is found, returns the starting directory name.
+func findProjectNameFromGit(startDir string) string {
+	currentDir, err := filepath.Abs(startDir)
+	if err != nil {
+		return filepath.Base(startDir)
+	}
+
+	startDirName := filepath.Base(currentDir)
+
+	root := filepath.VolumeName(currentDir) + string(filepath.Separator)
+	if root == string(filepath.Separator) {
+		root = "/"
+	}
+
+	for currentDir != root {
+		gitPath := filepath.Join(currentDir, ".git")
+		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+			return filepath.Base(currentDir)
+		}
+		currentDir = filepath.Dir(currentDir)
+	}
+
+	// No .git found, use the starting directory name
+	return startDirName
 }
 
 // GetDefaultGlobalConfigTemplate returns the default global config template
