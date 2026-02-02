@@ -61,6 +61,11 @@ sudo mv gantry-linux-amd64 /usr/local/bin/gantry
 
 **Option 1: Install script (recommended)**
 
+CMD (Command Prompt):
+```cmd
+curl -fsSL https://raw.githubusercontent.com/mattabdou/gantry/main/install.cmd -o install.cmd && install.cmd && del install.cmd
+```
+
 PowerShell:
 ```powershell
 irm https://raw.githubusercontent.com/mattabdou/gantry/main/install.ps1 | iex
