@@ -106,6 +106,58 @@ func TestValidateGlobalConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "valid defaultTool cc",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username:    "john.doe",
+					DefaultTool: "cc",
+				},
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid defaultTool oc",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username:    "john.doe",
+					DefaultTool: "oc",
+				},
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid defaultTool ocd",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username:    "john.doe",
+					DefaultTool: "ocd",
+				},
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid defaultTool",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Username:    "john.doe",
+					DefaultTool: "invalid",
+				},
+				OTEL: OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -340,5 +392,162 @@ func TestSetConfigValue(t *testing.T) {
 
 	if config.OTEL.MetricExportInterval != 30000 {
 		t.Errorf("MetricExportInterval = %v, want %v", config.OTEL.MetricExportInterval, 30000)
+	}
+}
+
+func TestIsValidTool(t *testing.T) {
+	tests := []struct {
+		tool  string
+		valid bool
+	}{
+		{"cc", true},
+		{"oc", true},
+		{"ocd", true},
+		{"CC", false},   // case sensitive
+		{"claude", false},
+		{"opencode", false},
+		{"", false},
+		{"invalid", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			result := IsValidTool(tt.tool)
+			if result != tt.valid {
+				t.Errorf("IsValidTool(%q) = %v, want %v", tt.tool, result, tt.valid)
+			}
+		})
+	}
+}
+
+func TestValidToolValues(t *testing.T) {
+	// Ensure the ValidToolValues slice has the expected values
+	expected := []string{"cc", "oc", "ocd"}
+
+	if len(ValidToolValues) != len(expected) {
+		t.Errorf("ValidToolValues has %d elements, expected %d", len(ValidToolValues), len(expected))
+	}
+
+	for _, v := range expected {
+		found := false
+		for _, vt := range ValidToolValues {
+			if v == vt {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ValidToolValues missing expected value %q", v)
+		}
+	}
+}
+
+func TestIsValidReleaseChannel(t *testing.T) {
+	tests := []struct {
+		channel string
+		valid   bool
+	}{
+		{"stable", true},
+		{"beta", true},
+		{"STABLE", false}, // case sensitive
+		{"BETA", false},
+		{"alpha", false},
+		{"", false},
+		{"release", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.channel, func(t *testing.T) {
+			result := IsValidReleaseChannel(tt.channel)
+			if result != tt.valid {
+				t.Errorf("IsValidReleaseChannel(%q) = %v, want %v", tt.channel, result, tt.valid)
+			}
+		})
+	}
+}
+
+func TestGetReleaseChannel(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *GlobalConfig
+		want    string
+	}{
+		{
+			name:   "nil config",
+			config: nil,
+			want:   "stable",
+		},
+		{
+			name:   "nil gantry section",
+			config: &GlobalConfig{},
+			want:   "stable",
+		},
+		{
+			name: "empty release",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Release: "",
+				},
+			},
+			want: "stable",
+		},
+		{
+			name: "stable release",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Release: "stable",
+				},
+			},
+			want: "stable",
+		},
+		{
+			name: "beta release",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Release: "beta",
+				},
+			},
+			want: "beta",
+		},
+		{
+			name: "invalid release defaults to stable",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{
+					Release: "invalid",
+				},
+			},
+			want: "stable",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetReleaseChannel(tt.config)
+			if got != tt.want {
+				t.Errorf("GetReleaseChannel() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidReleaseChannels(t *testing.T) {
+	// Ensure the ValidReleaseChannels slice has the expected values
+	expected := []string{"stable", "beta"}
+
+	if len(ValidReleaseChannels) != len(expected) {
+		t.Errorf("ValidReleaseChannels has %d elements, expected %d", len(ValidReleaseChannels), len(expected))
+	}
+
+	for _, v := range expected {
+		found := false
+		for _, vc := range ValidReleaseChannels {
+			if v == vc {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ValidReleaseChannels missing expected value %q", v)
+		}
 	}
 }

@@ -114,6 +114,21 @@ func TestBuildResourceAttributesNilProject(t *testing.T) {
 }
 
 func TestBuildEnvironmentBedrock(t *testing.T) {
+	// Temporarily unset LiteLLM-related env vars if they exist
+	litellmEnvVars := []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"}
+	originalValues := make(map[string]string)
+	for _, v := range litellmEnvVars {
+		if val, ok := os.LookupEnv(v); ok {
+			originalValues[v] = val
+			os.Unsetenv(v)
+		}
+	}
+	defer func() {
+		for k, v := range originalValues {
+			os.Setenv(k, v)
+		}
+	}()
+
 	trueVal := true
 	falseVal := false
 

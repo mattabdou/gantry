@@ -76,6 +76,7 @@ func TestCompareVersions(t *testing.T) {
 		v2   string
 		want int
 	}{
+		// Basic version comparisons
 		{"1.0.0", "1.0.0", 0},
 		{"1.0.0", "1.0.1", -1},
 		{"1.0.1", "1.0.0", 1},
@@ -89,6 +90,27 @@ func TestCompareVersions(t *testing.T) {
 		{"1.0.0", "1.0", 0},
 		{"1.10.0", "1.9.0", 1},
 		{"1.9.0", "1.10.0", -1},
+
+		// Prerelease version comparisons
+		{"1.0.0-beta.1", "1.0.0-beta.1", 0},
+		{"1.0.0-beta.1", "1.0.0-beta.2", -1},
+		{"1.0.0-beta.2", "1.0.0-beta.1", 1},
+		{"1.0.0-alpha", "1.0.0-beta", -1},
+		{"1.0.0-beta", "1.0.0-alpha", 1},
+
+		// Prerelease vs stable (stable is always greater)
+		{"1.0.0-beta.1", "1.0.0", -1},
+		{"1.0.0", "1.0.0-beta.1", 1},
+		{"1.0.0-beta.99", "1.0.0", -1},
+
+		// Different base versions with prerelease
+		{"1.0.0-beta.1", "1.0.1", -1},
+		{"1.0.1-beta.1", "1.0.0", 1},
+		{"2.0.0-beta.1", "1.9.9", 1},
+
+		// Complex prerelease identifiers
+		{"1.0.0-alpha.1", "1.0.0-alpha.2", -1},
+		{"1.0.0-rc.1", "1.0.0-beta.1", 1}, // rc > beta alphabetically
 	}
 
 	for _, tt := range tests {
@@ -96,6 +118,29 @@ func TestCompareVersions(t *testing.T) {
 			got := CompareVersions(tt.v1, tt.v2)
 			if got != tt.want {
 				t.Errorf("CompareVersions(%q, %q) = %v, want %v", tt.v1, tt.v2, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPrerelease(t *testing.T) {
+	tests := []struct {
+		version string
+		want    bool
+	}{
+		{"1.0.0", false},
+		{"1.0.0-beta.1", true},
+		{"1.0.0-alpha", true},
+		{"1.0.0-rc.1", true},
+		{"v1.0.0", false},
+		{"v1.0.0-beta.1", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			got := IsPrerelease(tt.version)
+			if got != tt.want {
+				t.Errorf("IsPrerelease(%q) = %v, want %v", tt.version, got, tt.want)
 			}
 		})
 	}
@@ -118,7 +163,7 @@ func TestCheckForUpdate(t *testing.T) {
 	// or if there are no releases yet
 	t.Skip("Skipping network-dependent test")
 
-	result := CheckForUpdate("0.0.1")
+	result := CheckForUpdate("0.0.1", "stable")
 
 	if result.Error != nil {
 		t.Logf("CheckForUpdate() returned error (may be expected): %v", result.Error)
@@ -131,5 +176,9 @@ func TestCheckForUpdate(t *testing.T) {
 
 	if result.LatestVersion == "" {
 		t.Error("LatestVersion is empty")
+	}
+
+	if result.Channel != "stable" {
+		t.Errorf("Channel = %v, want stable", result.Channel)
 	}
 }

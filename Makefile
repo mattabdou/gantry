@@ -2,7 +2,7 @@
 # Cross-platform build targets for Windows, macOS, and Linux
 
 BINARY_NAME=gantry
-VERSION=1.1.5
+VERSION=1.1.6
 BUILD_DIR=build
 LDFLAGS=-ldflags "-s -w"
 

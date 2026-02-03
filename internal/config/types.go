@@ -12,13 +12,15 @@ type GlobalConfig struct {
 // GantryConfig contains GANTRY-specific configuration
 type GantryConfig struct {
 	Mode                   string `json:"mode,omitempty"`
+	DefaultTool            string `json:"defaultTool,omitempty"` // "cc" for Claude Code, "oc" for OpenCode Terminal, "ocd" for OpenCode Desktop
 	Username               string `json:"username"`
+	Release                string `json:"release,omitempty"` // "stable" or "beta" - which release channel to use for updates
 	IgnorePowerline        *bool  `json:"ignorePowerline,omitempty"`
 	EnablePowerline        *bool  `json:"enablePowerline,omitempty"`
 	BypassLoadingScreen    *bool  `json:"bypassLoadingScreen,omitempty"`
 	CheckForUpdateOnLaunch *bool  `json:"checkForUpdateOnLaunch,omitempty"`
-	LastUpdateCheck        string `json:"lastUpdateCheck,omitempty"`        // RFC3339 timestamp of last update check
-	LastUpdateResult       string `json:"lastUpdateResult,omitempty"`       // Cached latest version from last check
+	LastUpdateCheck        string `json:"lastUpdateCheck,omitempty"`  // RFC3339 timestamp of last update check
+	LastUpdateResult       string `json:"lastUpdateResult,omitempty"` // Cached latest version from last check
 }
 
 // OTELConfig contains OpenTelemetry configuration

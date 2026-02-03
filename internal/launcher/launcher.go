@@ -238,3 +238,40 @@ func LaunchClaude(args []string, env []string) error {
 
 	return nil
 }
+
+// LaunchOpenCodeTerminal spawns OpenCode Terminal with the configured environment
+func LaunchOpenCodeTerminal(args []string, env []string) error {
+	cmd := exec.Command("opencode", args...)
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return err
+	}
+
+	return nil
+}
+
+// LaunchOpenCodeDesktop launches the OpenCode Desktop application
+func LaunchOpenCodeDesktop() error {
+	command, args := GetOpenCodeDesktopLaunchCommand()
+
+	cmd := exec.Command(command, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	// Don't wait for desktop app to exit
+	return nil
+}

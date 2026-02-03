@@ -25,6 +25,8 @@ const (
 type Release struct {
 	TagName     string    `json:"tag_name"`
 	Name        string    `json:"name"`
+	Prerelease  bool      `json:"prerelease"`
+	Draft       bool      `json:"draft"`
 	PublishedAt time.Time `json:"published_at"`
 	Assets      []Asset   `json:"assets"`
 	HTMLURL     string    `json:"html_url"`
@@ -43,6 +45,7 @@ type UpdateResult struct {
 	LatestVersion   string
 	UpdateAvailable bool
 	ReleaseURL      string
+	Channel         string
 	Error           error
 }
 
@@ -81,7 +84,8 @@ func GetBinaryName() string {
 	return name
 }
 
-// GetLatestRelease fetches the latest release information from GitHub
+// GetLatestRelease fetches the latest stable release information from GitHub
+// This uses the /releases/latest endpoint which automatically skips pre-releases
 func GetLatestRelease() (*Release, error) {
 	url := fmt.Sprintf("%s/repos/%s/releases/latest", GitHubAPIURL, GitHubRepo)
 
@@ -116,15 +120,161 @@ func GetLatestRelease() (*Release, error) {
 	return &release, nil
 }
 
+// GetAllReleases fetches all releases from GitHub (including pre-releases)
+func GetAllReleases() ([]Release, error) {
+	url := fmt.Sprintf("%s/repos/%s/releases", GitHubAPIURL, GitHubRepo)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "gantry-updater")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch releases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("no releases found")
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var releases []Release
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, fmt.Errorf("failed to parse releases: %w", err)
+	}
+
+	return releases, nil
+}
+
+// GetLatestPreRelease fetches the latest pre-release from GitHub
+func GetLatestPreRelease() (*Release, error) {
+	releases, err := GetAllReleases()
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the latest pre-release (they come sorted by date, newest first)
+	for i := range releases {
+		if releases[i].Prerelease && !releases[i].Draft {
+			return &releases[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("no pre-releases found")
+}
+
+// GetLatestReleaseForChannel fetches the latest release for the specified channel
+func GetLatestReleaseForChannel(channel string) (*Release, error) {
+	if channel == "beta" {
+		return GetLatestPreRelease()
+	}
+	return GetLatestRelease()
+}
+
 // ParseVersion extracts version number from tag (e.g., "v1.0.0" -> "1.0.0")
 func ParseVersion(tag string) string {
 	return strings.TrimPrefix(tag, "v")
 }
 
-// CompareVersions compares two version strings
+// splitVersionAndPrerelease splits a version into base version and prerelease suffix
+// e.g., "1.2.0-beta.1" -> ("1.2.0", "beta.1")
+// e.g., "1.2.0" -> ("1.2.0", "")
+func splitVersionAndPrerelease(version string) (string, string) {
+	version = strings.TrimPrefix(version, "v")
+	parts := strings.SplitN(version, "-", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return parts[0], ""
+}
+
+// IsPrerelease checks if a version string contains a prerelease suffix
+func IsPrerelease(version string) bool {
+	_, prerelease := splitVersionAndPrerelease(version)
+	return prerelease != ""
+}
+
+// comparePrerelease compares two prerelease strings
+// Returns: -1 if p1 < p2, 0 if p1 == p2, 1 if p1 > p2
+// Empty string (stable) is considered greater than any prerelease
+func comparePrerelease(p1, p2 string) int {
+	// Both empty means equal
+	if p1 == "" && p2 == "" {
+		return 0
+	}
+	// Empty (stable) > any prerelease
+	if p1 == "" {
+		return 1
+	}
+	if p2 == "" {
+		return -1
+	}
+
+	// Compare prerelease identifiers
+	// Split by dots and compare each part
+	parts1 := strings.Split(p1, ".")
+	parts2 := strings.Split(p2, ".")
+
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		var s1, s2 string
+		if i < len(parts1) {
+			s1 = parts1[i]
+		}
+		if i < len(parts2) {
+			s2 = parts2[i]
+		}
+
+		// Try numeric comparison first
+		var n1, n2 int
+		cnt1, _ := fmt.Sscanf(s1, "%d", &n1)
+		cnt2, _ := fmt.Sscanf(s2, "%d", &n2)
+		isNum1 := cnt1 == 1
+		isNum2 := cnt2 == 1
+
+		if isNum1 && isNum2 {
+			if n1 < n2 {
+				return -1
+			}
+			if n1 > n2 {
+				return 1
+			}
+		} else if isNum1 {
+			// Numeric < string in semver
+			return -1
+		} else if isNum2 {
+			return 1
+		} else {
+			// String comparison
+			if s1 < s2 {
+				return -1
+			}
+			if s1 > s2 {
+				return 1
+			}
+		}
+	}
+
+	return 0
+}
+
+// CompareVersions compares two version strings following semver rules
 // Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+// Handles prerelease versions: 1.0.0-beta.1 < 1.0.0-beta.2 < 1.0.0
 func CompareVersions(v1, v2 string) int {
-	// Simple comparison - could be enhanced with semver library
 	v1 = strings.TrimPrefix(v1, "v")
 	v2 = strings.TrimPrefix(v2, "v")
 
@@ -132,8 +282,13 @@ func CompareVersions(v1, v2 string) int {
 		return 0
 	}
 
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
+	// Split into base version and prerelease
+	base1, pre1 := splitVersionAndPrerelease(v1)
+	base2, pre2 := splitVersionAndPrerelease(v2)
+
+	// Compare base versions first
+	parts1 := strings.Split(base1, ".")
+	parts2 := strings.Split(base2, ".")
 
 	maxLen := len(parts1)
 	if len(parts2) > maxLen {
@@ -157,16 +312,18 @@ func CompareVersions(v1, v2 string) int {
 		}
 	}
 
-	return 0
+	// Base versions are equal, compare prerelease
+	return comparePrerelease(pre1, pre2)
 }
 
-// CheckForUpdate checks if an update is available
-func CheckForUpdate(currentVersion string) *UpdateResult {
+// CheckForUpdate checks if an update is available for the specified channel
+func CheckForUpdate(currentVersion string, channel string) *UpdateResult {
 	result := &UpdateResult{
 		CurrentVersion: currentVersion,
+		Channel:        channel,
 	}
 
-	release, err := GetLatestRelease()
+	release, err := GetLatestReleaseForChannel(channel)
 	if err != nil {
 		result.Error = err
 		return result
@@ -301,11 +458,11 @@ func ReplaceExecutable(newPath string) error {
 	return nil
 }
 
-// Update performs the full update process
-func Update(currentVersion string) error {
-	fmt.Println("Checking for updates...")
+// Update performs the full update process for the specified channel
+func Update(currentVersion string, channel string) error {
+	fmt.Printf("Checking for updates (%s channel)...\n", channel)
 
-	release, err := GetLatestRelease()
+	release, err := GetLatestReleaseForChannel(channel)
 	if err != nil {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
@@ -313,7 +470,7 @@ func Update(currentVersion string) error {
 	latestVersion := ParseVersion(release.TagName)
 
 	if CompareVersions(currentVersion, latestVersion) >= 0 {
-		fmt.Printf("Already up to date (v%s)\n", currentVersion)
+		fmt.Printf("Already up to date (v%s on %s channel)\n", currentVersion, channel)
 		return nil
 	}
 
@@ -331,6 +488,6 @@ func Update(currentVersion string) error {
 		return fmt.Errorf("failed to install update: %w", err)
 	}
 
-	fmt.Printf("Successfully updated to v%s!\n", latestVersion)
+	fmt.Printf("Successfully updated to v%s (%s channel)!\n", latestVersion, channel)
 	return nil
 }

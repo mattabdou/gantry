@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/updater"
 	"github.com/spf13/cobra"
 )
 
 // Version is the current version of GANTRY
-const Version = "1.1.5"
+const Version = "1.1.6"
 
 var versionCheckUpdate bool
 
@@ -28,14 +29,21 @@ func init() {
 }
 
 func showVersion() {
-	fmt.Printf("GANTRY v%s\n", Version)
+	// Get current channel from config
+	channel := "stable"
+	globalConfig, err := config.LoadGlobalConfigRaw()
+	if err == nil {
+		channel = config.GetReleaseChannel(globalConfig)
+	}
+
+	fmt.Printf("gantry v%s (%s channel)\n", Version, channel)
 	fmt.Printf("  OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 
 	if versionCheckUpdate {
 		fmt.Println()
-		fmt.Println("Checking for updates...")
+		fmt.Printf("Checking for updates (%s channel)...\n", channel)
 
-		result := updater.CheckForUpdate(Version)
+		result := updater.CheckForUpdate(Version, channel)
 		if result.Error != nil {
 			fmt.Printf("  Could not check for updates: %v\n", result.Error)
 			return

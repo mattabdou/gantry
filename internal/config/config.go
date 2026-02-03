@@ -56,11 +56,112 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 		return nil, fmt.Errorf("invalid JSON in %s: %w", configPath, err)
 	}
 
+	// Auto-migrate: add defaultTool if missing
+	if config.Gantry != nil && config.Gantry.DefaultTool == "" {
+		config.Gantry.DefaultTool = "cc"
+		// Save the migrated config (ignore errors - non-critical)
+		_ = SaveGlobalConfig(&config)
+	}
+
 	if err := ValidateGlobalConfig(&config); err != nil {
 		return nil, err
 	}
 
 	return &config, nil
+}
+
+// ValidToolValues contains the valid values for the defaultTool config
+var ValidToolValues = []string{"cc", "oc", "ocd"}
+
+// IsValidTool checks if a tool value is valid
+func IsValidTool(tool string) bool {
+	for _, v := range ValidToolValues {
+		if tool == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidReleaseChannels contains the valid values for the release channel config
+var ValidReleaseChannels = []string{"stable", "beta"}
+
+// IsValidReleaseChannel checks if a release channel value is valid
+func IsValidReleaseChannel(channel string) bool {
+	for _, v := range ValidReleaseChannels {
+		if channel == v {
+			return true
+		}
+	}
+	return false
+}
+
+// GetReleaseChannel returns the current release channel from config, defaulting to "stable"
+func GetReleaseChannel(config *GlobalConfig) string {
+	if config == nil || config.Gantry == nil || config.Gantry.Release == "" {
+		return "stable"
+	}
+	if !IsValidReleaseChannel(config.Gantry.Release) {
+		return "stable"
+	}
+	return config.Gantry.Release
+}
+
+// BackupConfigForChannelSwitch creates a backup of the config file when switching channels
+// Returns the backup path if created, empty string if backup already exists, or error
+func BackupConfigForChannelSwitch(fromChannel, toChannel string) (string, error) {
+	if fromChannel == toChannel {
+		return "", nil
+	}
+
+	configPath, err := GetGlobalConfigPath()
+	if err != nil {
+		return "", err
+	}
+
+	// Determine backup filename based on the channel we're switching FROM
+	var backupPath string
+	if fromChannel == "stable" && toChannel == "beta" {
+		backupPath = configPath + ".stable"
+	} else if fromChannel == "beta" && toChannel == "stable" {
+		backupPath = configPath + ".beta"
+	} else {
+		// Unknown channel transition, no backup needed
+		return "", nil
+	}
+
+	// Check if backup already exists - never overwrite
+	if _, err := os.Stat(backupPath); err == nil {
+		// Backup already exists, don't overwrite
+		return "", nil
+	}
+
+	// Read current config
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read config for backup: %w", err)
+	}
+
+	// Write backup
+	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write config backup: %w", err)
+	}
+
+	return backupPath, nil
+}
+
+// SetReleaseChannel updates the release channel in the config and saves it
+func SetReleaseChannel(config *GlobalConfig, channel string) error {
+	if !IsValidReleaseChannel(channel) {
+		return fmt.Errorf("invalid release channel %q - must be one of: stable, beta", channel)
+	}
+
+	if config.Gantry == nil {
+		config.Gantry = &GantryConfig{}
+	}
+	config.Gantry.Release = channel
+
+	return SaveGlobalConfig(config)
 }
 
 // ValidateGlobalConfig validates the global config has required fields
@@ -72,6 +173,11 @@ func ValidateGlobalConfig(config *GlobalConfig) error {
 
 	if strings.Contains(config.Gantry.Username, "YOUR_") || strings.Contains(config.Gantry.Username, "your-") {
 		return errors.New("global config \"gantry.username\" contains placeholder value - please configure your actual username")
+	}
+
+	// Validate defaultTool if specified
+	if config.Gantry.DefaultTool != "" && !IsValidTool(config.Gantry.DefaultTool) {
+		return fmt.Errorf("global config \"gantry.defaultTool\" has invalid value %q - must be one of: cc, oc, ocd", config.Gantry.DefaultTool)
 	}
 
 	// Validate OTEL section
@@ -178,6 +284,7 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 	return &GlobalConfig{
 		Gantry: &GantryConfig{
 			Mode:                   "YOUR_MODE_HERE",
+			DefaultTool:            "cc",
 			Username:               "YOUR_USERNAME_HERE",
 			IgnorePowerline:        &trueVal,
 			EnablePowerline:        &trueVal,

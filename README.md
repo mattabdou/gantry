@@ -1,19 +1,20 @@
 # gantry
 
-A launcher for Claude Code that configures environment and telemetry.
+A launcher for AI coding tools that configures environment and telemetry.
 
 ## Overview
 
-gantry automatically configures Claude Code with:
+gantry automatically configures AI coding tools with:
 
+- **Multiple Tools** - Launch Claude Code, OpenCode Terminal, or OpenCode Desktop
 - **Multiple Providers** - Support for AWS Bedrock or LiteLLM proxy
-- **Telemetry** - OpenTelemetry attributes for AI cost tracking
+- **Telemetry** - OpenTelemetry attributes for AI cost tracking (Claude Code only)
   - **Username** - Who is using the AI
   - **Project** - Which project the work is for
   - **Team & Cost Center** - Organizational attribution
   - **Git Branch** - Current working branch (for issue/PR tracking)
   - **Working Path** - Where the developer is working
-- **claude-powerline** - Configures status bar theme and style
+- **claude-powerline** - Configures status bar theme and style (Claude Code only)
 
 This data flows to your OTEL collector and can be visualized in Grafana to answer questions like:
 
@@ -126,6 +127,7 @@ At minimum, you need to configure:
 {
   "gantry": {
     "mode": "bedrock",
+    "defaultTool": "cc",
     "username": "your.username",
     "ignorePowerline": true,
     "enablePowerline": true,
@@ -160,6 +162,25 @@ At minimum, you need to configure:
     "maxThinkingTokens": 1024
   }
 }
+```
+
+#### Tool Selection
+
+Set `gantry.defaultTool` to select which AI tool to launch:
+
+| Tool | Description |
+|------|-------------|
+| `cc` | Claude Code (default) |
+| `oc` | OpenCode Terminal |
+| `ocd` | OpenCode Desktop |
+
+You can also override the tool from the command line:
+
+```bash
+gantry --tool cc     # Launch Claude Code
+gantry --tool oc     # Launch OpenCode Terminal
+gantry --tool ocd    # Launch OpenCode Desktop
+gantry -t oc         # Short form
 ```
 
 #### Provider Mode
@@ -258,16 +279,25 @@ gantry searches for `.gantry.json` starting from the current directory and walki
 
 ## Usage
 
-Instead of running `claude`, run `gantry`:
+Instead of running `claude` or `opencode` directly, run `gantry`:
 
 ```bash
-# Start Claude Code with gantry configuration (uses mode from config)
+# Start AI tool with gantry configuration (uses tool and mode from config)
 gantry
+
+# Override the AI tool from command line
+gantry --tool cc     # Launch Claude Code
+gantry --tool oc     # Launch OpenCode Terminal
+gantry --tool ocd    # Launch OpenCode Desktop
+gantry -t oc         # Short form
 
 # Override the provider mode from command line
 gantry --mode bedrock    # Use AWS Bedrock
 gantry --mode litellm    # Use LiteLLM proxy
 gantry -m bedrock        # Short form
+
+# Combine tool and mode overrides
+gantry -t oc -m litellm  # OpenCode Terminal with LiteLLM
 
 # Pass arguments through to Claude Code
 gantry /path/to/file
@@ -277,6 +307,7 @@ gantry init           # Create global config
 gantry init --force   # Recreate global config
 gantry config         # Interactive configuration editor
 gantry config show    # Display current configuration
+gantry models         # List available LiteLLM models
 gantry update         # Update gantry to latest version
 gantry update --check # Check for updates
 gantry version        # Show version info
@@ -286,15 +317,18 @@ gantry --version      # Show gantry version
 
 ## Confirmation Screen
 
-When you run `gantry`, it displays a confirmation screen showing all the configuration that will be applied before launching Claude Code:
+When you run `gantry`, it displays a confirmation screen showing all the configuration that will be applied before launching the AI tool:
 
 ```
 ╔══════════════════════════════════════════════════════════════════╗
-║              gantry - Claude Code Launcher                       ║
+║              gantry - AI Tool Launcher                           ║
 ║              Version: 1.0.0                                      ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  The following configuration will be applied:                    ║
 ╠══════════════════════════════════════════════════════════════════╣
+║  TOOL                                                            ║
+║    Tool:            cc - Claude Code (from config)               ║
+║                                                                  ║
 ║  USER IDENTITY                                                   ║
 ║    Username:        john.doe                                     ║
 ║                                                                  ║
@@ -320,11 +354,11 @@ When you run `gantry`, it displays a confirmation screen showing all the configu
 ╚══════════════════════════════════════════════════════════════════╝
 ```
 
-This allows you to review the configuration before Claude Code starts. Press **Enter** to continue or **q** to cancel.
+This allows you to review the configuration before the AI tool starts. Press **Enter** to continue or **q** to cancel.
 
 ### Disabling the Confirmation Screen
 
-If you prefer to skip the confirmation screen and launch Claude Code immediately, set `bypassLoadingScreen` to `true` in your `~/.gantryrc.json`:
+If you prefer to skip the confirmation screen and launch the AI tool immediately, set `bypassLoadingScreen` to `true` in your `~/.gantryrc.json`:
 
 ```json
 {
@@ -344,7 +378,7 @@ Or use the command line:
 gantry config set gantry.bypassLoadingScreen true
 ```
 
-When bypassed, gantry will show minimal output (project config path and git branch) before launching Claude Code.
+When bypassed, gantry will show minimal output (project config path and git branch) before launching the AI tool.
 
 ## Configuration Management
 
@@ -388,7 +422,9 @@ Use dot notation for nested values:
 | Key | Type | Description |
 |-----|------|-------------|
 | `gantry.mode` | string | Provider mode: `bedrock` or `litellm` |
+| `gantry.defaultTool` | string | AI tool: `cc` (Claude Code), `oc` (OpenCode Terminal), `ocd` (OpenCode Desktop) |
 | `gantry.username` | string | Your username for telemetry |
+| `gantry.release` | string | Release channel: `stable` or `beta` (default: stable) |
 | `gantry.ignorePowerline` | boolean | Skip all powerline configuration (default: true) |
 | `gantry.enablePowerline` | boolean | Enable powerline status bar (requires ignorePowerline=false) |
 | `gantry.bypassLoadingScreen` | boolean | Skip confirmation screen on startup |
@@ -418,6 +454,8 @@ Use dot notation for nested values:
 | `otel.includeAccountUuid` | boolean | Include account UUID |
 
 ## Telemetry Attributes
+
+> **Note**: OTEL telemetry is only supported when using Claude Code. OpenCode does not support OTEL telemetry.
 
 gantry adds the following resource attributes to OTEL telemetry:
 
@@ -475,17 +513,44 @@ sum by (gantry_cost_center) (claude_code_tokens_total)
 gantry can update itself to the latest version:
 
 ```bash
-# Update to latest version
+# Update to latest version (uses your saved channel preference)
 gantry update
 
 # Check if an update is available without installing
 gantry update --check
 ```
 
+### Release Channels
+
+gantry supports two release channels:
+
+| Channel | Description |
+|---------|-------------|
+| `stable` | Production-ready releases (default) |
+| `beta` | Early access to new features, may include experimental changes |
+
+Switch between channels using:
+
+```bash
+# Switch to beta channel and update
+gantry update --beta
+
+# Switch back to stable channel and update
+gantry update --stable
+```
+
+Your channel preference is saved in `~/.gantryrc.json` under `gantry.release`.
+
+**Note**: When switching channels, gantry creates a backup of your config:
+- Switching to beta: Creates `.gantryrc.json.stable`
+- Switching to stable: Creates `.gantryrc.json.beta`
+
+These backups are only created once (the first time you switch) and are never overwritten.
+
 ### Version Information
 
 ```bash
-# Show current version
+# Show current version and channel
 gantry version
 
 # Show version and check for updates
@@ -540,6 +605,62 @@ When you run `gantry` with `ignorePowerline: false`, it:
 
 If `ignorePowerline` is `true` (the default), gantry will not modify `~/.claude/settings.json` at all.
 
+## OpenCode Integration
+
+gantry supports launching [OpenCode](https://opencode.ai/) in both terminal and desktop modes. When using OpenCode, gantry automatically configures the provider settings in OpenCode's config file.
+
+### How It Works
+
+When you launch OpenCode via gantry:
+
+1. gantry detects if OpenCode Terminal or Desktop is installed
+2. Creates a timestamped backup of `~/.config/opencode/opencode.json` (if it exists)
+3. Configures the appropriate provider in OpenCode's config:
+   - **LiteLLM mode**: Adds `gantry-litellm` provider with your baseURL and authToken
+   - **Bedrock mode**: Adds `gantry-bedrock` provider with your AWS region and profile
+4. Launches OpenCode
+
+### OpenCode Installation
+
+**OpenCode Terminal:**
+
+```bash
+# macOS / Linux
+npm install -g @anthropics/opencode
+# or
+brew install opencode
+```
+
+**OpenCode Desktop:**
+
+Download from [opencode.ai](https://opencode.ai/) or:
+- macOS: `brew install --cask opencode`
+- Windows: Available via installer or Scoop
+- Linux: Available as AppImage or via package managers
+
+### Differences from Claude Code
+
+When using OpenCode instead of Claude Code:
+
+| Feature | Claude Code | OpenCode |
+|---------|-------------|----------|
+| OTEL Telemetry | ✅ Configured | ❌ Not supported |
+| Powerline | ✅ Configured | ❌ Not applicable |
+| Provider Config | Environment variables | Config file |
+| Model Selection | Via config | Via `/model` command |
+
+**Note**: OTEL telemetry and powerline are Claude Code-specific features and are not configured when using OpenCode.
+
+### Config Backups
+
+Before modifying OpenCode's config, gantry creates a backup with a timestamp:
+
+```
+~/.config/opencode/opencode.json.backup.2026-02-02T15-04-05
+```
+
+This allows you to restore the original config if needed.
+
 ## Troubleshooting
 
 ### "Global config missing gantry.username"
@@ -580,6 +701,38 @@ curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del in
 
 For more details, see the [Claude Code setup guide](https://code.claude.com/docs/en/setup).
 
+### "OpenCode Terminal is not installed or not in PATH"
+
+Install OpenCode Terminal using npm or your package manager:
+
+```bash
+# npm
+npm install -g @anthropics/opencode
+
+# Homebrew (macOS)
+brew install opencode
+```
+
+### "OpenCode Desktop is not installed"
+
+OpenCode Desktop is detected by looking for the application in standard locations:
+
+- **macOS**: `/Applications/OpenCode.app` or `~/Applications/OpenCode.app`
+- **Windows**: `%LOCALAPPDATA%\Programs\OpenCode\OpenCode.exe` or Scoop installation
+- **Linux**: `/usr/bin/opencode-desktop` or desktop entry files
+
+Download from [opencode.ai](https://opencode.ai/) or install via:
+- macOS: `brew install --cask opencode`
+- Windows: Installer or `scoop install opencode`
+- Linux: AppImage or distribution package
+
+### Invalid tool value
+
+If you see an error about an invalid tool value, ensure `gantry.defaultTool` is one of:
+- `cc` - Claude Code
+- `oc` - OpenCode Terminal
+- `ocd` - OpenCode Desktop
+
 ### No project config found
 
 This is normal - gantry will use `"Unknown"` as the project name. To enable project tracking, create a `.gantry.json` file in your project root.
@@ -596,7 +749,9 @@ gantry provides pre-built binaries for:
 
 ## Requirements
 
-- [Claude Code](https://code.claude.com/docs/en/setup) installed
+- At least one AI coding tool installed:
+  - [Claude Code](https://code.claude.com/docs/en/setup), or
+  - [OpenCode](https://opencode.ai/) (Terminal or Desktop)
 - For building from source: Go 1.21 or later
 
 ## Uninstallation

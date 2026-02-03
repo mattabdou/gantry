@@ -9,21 +9,23 @@ import (
 
 	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/launcher"
+	"github.com/mattabdou/gantry/internal/opencode"
 	"github.com/mattabdou/gantry/internal/powerline"
 	"github.com/mattabdou/gantry/internal/updater"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gantry [claude-code-args...]",
+	Use:   "gantry [tool-args...]",
 	Short: "GANTRY - Gateway for AI Navigation, Telemetry, and Runtime Yield",
-	Long: `GANTRY is a launcher for Claude Code that configures environment and telemetry.
+	Long: `GANTRY is a launcher for AI coding tools (Claude Code, OpenCode) that configures
+environment, telemetry, and provider settings.
 
-It configures AWS Bedrock API, enriches OpenTelemetry telemetry with user, project,
-and organizational attributes for AI cost tracking, and configures the claude-powerline
-status bar.`,
+It supports AWS Bedrock and LiteLLM as providers, enriches OpenTelemetry telemetry
+with user, project, and organizational attributes for AI cost tracking, and
+configures tool-specific settings.`,
 	Version: Version,
-	// Allow unknown flags to be passed through to Claude Code
+	// Allow unknown flags to be passed through to the AI tool
 	DisableFlagParsing: true,
 }
 
@@ -74,9 +76,46 @@ func parseModeFlag(args []string) (mode string, filteredArgs []string) {
 	return mode, filteredArgs
 }
 
+// parseToolFlag extracts --tool or -t flag from args and returns the tool value and filtered args
+func parseToolFlag(args []string) (tool string, filteredArgs []string) {
+	filteredArgs = make([]string, 0, len(args))
+	skipNext := false
+
+	for i, arg := range args {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+
+		// Handle --tool=value or -t=value
+		if strings.HasPrefix(arg, "--tool=") {
+			tool = strings.TrimPrefix(arg, "--tool=")
+			continue
+		}
+		if strings.HasPrefix(arg, "-t=") {
+			tool = strings.TrimPrefix(arg, "-t=")
+			continue
+		}
+
+		// Handle --tool value or -t value
+		if arg == "--tool" || arg == "-t" {
+			if i+1 < len(args) {
+				tool = args[i+1]
+				skipNext = true
+			}
+			continue
+		}
+
+		filteredArgs = append(filteredArgs, arg)
+	}
+
+	return tool, filteredArgs
+}
+
 func runGantry(cmd *cobra.Command, args []string) {
-	// Parse --mode flag from args before other processing
+	// Parse --mode and --tool flags from args before other processing
 	modeFlag, filteredArgs := parseModeFlag(args)
+	toolFlag, filteredArgs := parseToolFlag(filteredArgs)
 
 	// Handle --help and --version flags manually since we disabled flag parsing
 	for _, arg := range filteredArgs {
@@ -89,7 +128,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 			return
 		}
 		// Handle subcommands
-		if arg == "init" || arg == "config" || arg == "update" || arg == "version" {
+		if arg == "init" || arg == "config" || arg == "update" || arg == "version" || arg == "models" {
 			// Re-enable cobra to handle subcommand
 			cmd.DisableFlagParsing = false
 			cmd.SetArgs(args)
@@ -187,6 +226,59 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Determine effective tool: command-line flag overrides config
+	tool := toolFlag
+	toolSource := "flag"
+	if tool == "" {
+		if globalConfig.Gantry != nil && globalConfig.Gantry.DefaultTool != "" {
+			tool = globalConfig.Gantry.DefaultTool
+			toolSource = "config"
+		} else {
+			tool = "cc" // Default to Claude Code
+			toolSource = "default"
+		}
+	}
+
+	// Validate tool value
+	if !config.IsValidTool(tool) {
+		fmt.Fprintf(os.Stderr, "Error: invalid tool %q.\n", tool)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop).")
+		fmt.Fprintln(os.Stderr, "")
+		os.Exit(1)
+	}
+
+	// Check tool installation
+	switch tool {
+	case "cc":
+		result := launcher.DetectClaudeCode()
+		if !result.Installed {
+			fmt.Fprintln(os.Stderr, "Error: Claude Code installation not detected.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+	case "oc":
+		result := launcher.DetectOpenCodeTerminal()
+		if !result.Installed {
+			fmt.Fprintln(os.Stderr, "OpenCode Terminal installation not detected.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Please visit https://opencode.ai/download to get started with installation.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+	case "ocd":
+		result := launcher.DetectOpenCodeDesktop()
+		if !result.Installed {
+			fmt.Fprintln(os.Stderr, "OpenCode Desktop installation not detected.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Please visit https://opencode.ai/download to get started with installation.")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
+	}
+
 	// ============================================
 	// PHASE 1: Gather all information (no actions)
 	// ============================================
@@ -257,8 +349,9 @@ func runGantry(cmd *cobra.Command, args []string) {
 	// Check for updates if enabled (defaults to true) and 6+ hours since last check
 	var updateAvailable bool
 	var latestVersion string
+	releaseChannel := config.GetReleaseChannel(globalConfig)
 	if shouldCheckForUpdate(globalConfig.Gantry) {
-		result := updater.CheckForUpdate(Version)
+		result := updater.CheckForUpdate(Version, releaseChannel)
 		if result.Error == nil {
 			updateAvailable = result.UpdateAvailable
 			latestVersion = result.LatestVersion
@@ -279,10 +372,21 @@ func runGantry(cmd *cobra.Command, args []string) {
 	// PHASE 2: Show confirmation screen (if enabled)
 	// ============================================
 
+	// Determine tool display name
+	var toolDisplayName string
+	switch tool {
+	case "cc":
+		toolDisplayName = "Claude Code"
+	case "oc":
+		toolDisplayName = "OpenCode Terminal"
+	case "ocd":
+		toolDisplayName = "OpenCode Desktop"
+	}
+
 	if !bypassLoadingScreen {
 		fmt.Println()
 		fmt.Println("╔════════════════════════════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║                    gantry - Claude Code Launcher                                       ║")
+		fmt.Println("║                    gantry - AI Tool Launcher                                           ║")
 		fmt.Println(boxLine("║                    Version: ", Version))
 		// Show update notification if available
 		if updateAvailable {
@@ -294,6 +398,17 @@ func runGantry(cmd *cobra.Command, args []string) {
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
 		fmt.Println("║  The following configuration will be applied:                                          ║")
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
+
+		// Tool info
+		fmt.Println("║  TOOL                                                                                  ║")
+		if toolSource == "flag" {
+			fmt.Println(boxLine("║    Launching:       ", toolDisplayName+" (from --tool flag)"))
+		} else if toolSource == "config" {
+			fmt.Println(boxLine("║    Launching:       ", toolDisplayName+" (from config)"))
+		} else {
+			fmt.Println(boxLine("║    Launching:       ", toolDisplayName+" (default)"))
+		}
+		fmt.Println("║                                                                                        ║")
 
 		// User info
 		fmt.Println("║  USER IDENTITY                                                                         ║")
@@ -345,10 +460,12 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 		fmt.Println("║                                                                                        ║")
 
-		// Powerline info
-		fmt.Println("║  POWERLINE STATUS BAR                                                                  ║")
-		fmt.Println(boxLine("║    Action:          ", powerlineAction))
-		fmt.Println("║                                                                                        ║")
+		// Powerline info (only for Claude Code)
+		if tool == "cc" {
+			fmt.Println("║  POWERLINE STATUS BAR                                                                  ║")
+			fmt.Println(boxLine("║    Action:          ", powerlineAction))
+			fmt.Println("║                                                                                        ║")
+		}
 
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════════════════════╣")
 		fmt.Println("║  Press ENTER to continue, or 'q' to cancel...                                          ║")
@@ -371,6 +488,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 
 	if bypassLoadingScreen {
 		// Show minimal output when bypassing
+		fmt.Printf("Launching: %s\n", toolDisplayName)
 		if projectConfig.Path != "" {
 			fmt.Printf("Using project config: %s\n", projectConfig.Path)
 		}
@@ -379,8 +497,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Handle powerline configuration (skip if ignorePowerline is true)
-	if !ignorePowerline {
+	// Handle powerline configuration (only for Claude Code, skip if ignorePowerline is true)
+	if tool == "cc" && !ignorePowerline {
 		if enablePowerline {
 			if globalConfig.Powerline != nil {
 				powerlineResult := powerline.UpdatePowerlineSettings(globalConfig.Powerline)
@@ -405,25 +523,63 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Build resource attributes
+	// Configure OpenCode if using OpenCode tools
+	if tool == "oc" || tool == "ocd" {
+		var configResult *opencode.ConfigureResult
+		var err error
+
+		if mode == "litellm" {
+			configResult, err = opencode.ConfigureLiteLLM(globalConfig.LiteLLM)
+		} else if mode == "bedrock" {
+			configResult, err = opencode.ConfigureBedrock(globalConfig.Bedrock)
+		}
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error configuring OpenCode: %v\n", err)
+			os.Exit(1)
+		}
+
+		if configResult != nil && configResult.Updated {
+			fmt.Printf("OpenCode: %s\n", configResult.Message)
+		}
+	}
+
+	// Build resource attributes (for Claude Code telemetry)
 	resourceAttributes := launcher.BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
 
-	// Build environment based on mode
+	// Build environment based on mode (for Claude Code)
 	env := launcher.BuildEnvironment(globalConfig, resourceAttributes, mode)
 
 	fmt.Println()
-	fmt.Println("Starting Claude Code with GANTRY configuration...")
+	fmt.Printf("Starting %s with GANTRY configuration...\n", toolDisplayName)
 	fmt.Println()
 
-	// Launch Claude Code with filtered arguments (mode flag removed)
-	if err := launcher.LaunchClaude(filteredArgs, env); err != nil {
-		if err.Error() == "executable file not found in $PATH" || err.Error() == "executable file not found in %PATH%" {
-			fmt.Fprintln(os.Stderr, "Error: Claude Code is not installed or not in PATH.")
-			fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
-		} else {
-			fmt.Fprintf(os.Stderr, "Error starting Claude Code: %v\n", err)
+	// Launch the selected tool
+	switch tool {
+	case "cc":
+		// Launch Claude Code with filtered arguments (mode and tool flags removed)
+		if err := launcher.LaunchClaude(filteredArgs, env); err != nil {
+			if err.Error() == "executable file not found in $PATH" || err.Error() == "executable file not found in %PATH%" {
+				fmt.Fprintln(os.Stderr, "Error: Claude Code is not installed or not in PATH.")
+				fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
+			} else {
+				fmt.Fprintf(os.Stderr, "Error starting Claude Code: %v\n", err)
+			}
+			os.Exit(1)
 		}
-		os.Exit(1)
+	case "oc":
+		// Launch OpenCode Terminal
+		if err := launcher.LaunchOpenCodeTerminal(filteredArgs, env); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting OpenCode Terminal: %v\n", err)
+			os.Exit(1)
+		}
+	case "ocd":
+		// Launch OpenCode Desktop
+		if err := launcher.LaunchOpenCodeDesktop(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting OpenCode Desktop: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("OpenCode Desktop launched.")
 	}
 }
 
@@ -469,15 +625,17 @@ func showHelp() {
 	fmt.Printf(`
 GANTRY - Gateway for AI Navigation, Telemetry, and Runtime Yield v%s
 
-A launcher for Claude Code that configures environment and telemetry.
+A launcher for AI coding tools (Claude Code, OpenCode) that configures
+environment, telemetry, and provider settings.
 
 Usage:
-  gantry [options] [claude-code-args...]    Run Claude Code with GANTRY configuration
+  gantry [options] [tool-args...]           Run AI tool with GANTRY configuration
   gantry init [--force]                     Create the global configuration file
   gantry config                             Interactive configuration editor
   gantry config show                        Display current configuration
   gantry config get <key>                   Get a configuration value
   gantry config set <key> <val>             Set a configuration value
+  gantry models                             List available models from LiteLLM
   gantry update                             Update gantry to the latest version
   gantry update --check                     Check if an update is available
   gantry version                            Show version information
@@ -486,13 +644,23 @@ Usage:
   gantry --version                          Show version number
 
 Options:
+  --tool, -t <tool>               Set the AI tool to launch
+                                  Overrides gantry.defaultTool in config file
+                                  Values: cc (Claude Code), oc (OpenCode Terminal),
+                                          ocd (OpenCode Desktop)
+
   --mode, -m <mode>               Set the provider mode (bedrock or litellm)
                                   Overrides gantry.mode in config file
 
+Tools:
+  cc                              Claude Code - Anthropic's CLI for Claude
+  oc                              OpenCode Terminal - Terminal-based AI coding agent
+  ocd                             OpenCode Desktop - Desktop AI coding application
+
 Modes:
-  bedrock                         Use AWS Bedrock as the Claude API provider
+  bedrock                         Use AWS Bedrock as the AI provider
                                   Requires: bedrock.awsProfile, bedrock.awsRegion
-  litellm                         Use LiteLLM proxy as the Claude API provider
+  litellm                         Use LiteLLM proxy as the AI provider
                                   Requires: litellm.baseUrl, litellm.authToken
 
 Environment Variables:
@@ -503,19 +671,20 @@ Configuration Files:
   .gantry.json                    Per-project configuration (optional)
 
 Examples:
-  gantry                          Start Claude Code (uses mode from config)
-  gantry --mode bedrock           Start Claude Code with AWS Bedrock
-  gantry --mode litellm           Start Claude Code with LiteLLM proxy
-  gantry -m bedrock               Short form of --mode
-  gantry --help                   Show GANTRY help
+  gantry                          Start default tool (uses config settings)
+  gantry --tool cc                Start Claude Code
+  gantry --tool oc                Start OpenCode Terminal
+  gantry --tool ocd               Start OpenCode Desktop
+  gantry -t oc --mode litellm     Start OpenCode Terminal with LiteLLM
+  gantry --mode bedrock           Start with AWS Bedrock provider
+  gantry --mode litellm           Start with LiteLLM proxy provider
   gantry init                     Initialize global configuration
   gantry init --force             Reinitialize global configuration
   gantry config                   Edit configuration interactively
   gantry config show              View current configuration
+  gantry config set gantry.defaultTool oc
   gantry config set gantry.mode bedrock
   gantry config set gantry.username john.doe
-  gantry config set bedrock.awsProfile my-profile
-  gantry config set litellm.baseUrl https://litellm.example.com
   gantry update                   Update to latest version
 
 For more information, see: https://github.com/mattabdou/gantry
