@@ -198,7 +198,7 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 		return nil, err
 	}
 
-	// Check if we need to update
+	// Check if we need to update provider
 	needsUpdate := false
 	currentProvider := getProviderConfig(cfg, "gantry-litellm")
 
@@ -243,7 +243,8 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 		cfg["provider"] = providers
 	}
 
-	// Set up gantry-litellm provider
+	// Set up gantry-litellm provider with models defined inside
+	// The model keys are what get sent to the API, "name" is for display
 	providers["gantry-litellm"] = map[string]interface{}{
 		"npm":  "@ai-sdk/openai-compatible",
 		"name": "Gantry LiteLLM",
@@ -251,7 +252,22 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 			"baseURL": litellmConfig.BaseURL,
 			"apiKey":  litellmConfig.AuthToken,
 		},
+		"models": map[string]interface{}{
+			"us.anthropic.claude-opus-4-5-20251101-v1:0": map[string]interface{}{
+				"name": "Claude Opus 4.5",
+			},
+			"us.anthropic.claude-sonnet-4-5-20250929-v1:0": map[string]interface{}{
+				"name": "Claude Sonnet 4.5",
+			},
+			"us.anthropic.claude-haiku-4-5-20251001-v1:0": map[string]interface{}{
+				"name": "Claude Haiku 4.5",
+			},
+		},
 	}
+
+	// Set default model to use gantry-litellm provider with Opus 4.5
+	// Format is "provider/model"
+	cfg["model"] = "gantry-litellm/us.anthropic.claude-opus-4-5-20251101-v1:0"
 
 	// Use opencode.json for new configs (not jsonc)
 	if !ConfigExists() {
@@ -284,7 +300,7 @@ func ConfigureBedrock(bedrockConfig *config.BedrockConfig) (*ConfigureResult, er
 		return nil, err
 	}
 
-	// Check if we need to update
+	// Check if we need to update provider
 	needsUpdate := false
 	currentProvider := getProviderConfig(cfg, "gantry-bedrock")
 
@@ -338,12 +354,27 @@ func ConfigureBedrock(bedrockConfig *config.BedrockConfig) (*ConfigureResult, er
 	providers["gantry-bedrock"] = map[string]interface{}{
 		"name":    "Gantry Bedrock",
 		"options": bedrockOpts,
+		"models": map[string]interface{}{
+			"us.anthropic.claude-opus-4-5-20251101-v1:0": map[string]interface{}{
+				"name": "Claude Opus 4.5",
+			},
+			"us.anthropic.claude-sonnet-4-5-20250929-v1:0": map[string]interface{}{
+				"name": "Claude Sonnet 4.5",
+			},
+			"us.anthropic.claude-haiku-4-5-20251001-v1:0": map[string]interface{}{
+				"name": "Claude Haiku 4.5",
+			},
+		},
 	}
 
 	// Also configure the amazon-bedrock provider with gantry settings
 	providers["amazon-bedrock"] = map[string]interface{}{
 		"options": bedrockOpts,
 	}
+
+	// Set default model to use gantry-bedrock provider with Opus 4.5
+	// Format is "provider/model"
+	cfg["model"] = "gantry-bedrock/us.anthropic.claude-opus-4-5-20251101-v1:0"
 
 	// Use opencode.json for new configs (not jsonc)
 	if !ConfigExists() {
@@ -383,3 +414,4 @@ func getProviderConfig(cfg OpenCodeConfig, providerID string) map[string]interfa
 
 	return provider
 }
+
