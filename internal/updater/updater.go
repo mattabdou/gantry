@@ -419,41 +419,56 @@ func ReplaceExecutable(newPath string) error {
 		return err
 	}
 
-	// On Windows, we need to rename the current executable first
-	if runtime.GOOS == "windows" {
-		oldPath := currentPath + ".old"
-		// Remove old backup if exists
-		os.Remove(oldPath)
-		// Rename current to .old
-		if err := os.Rename(currentPath, oldPath); err != nil {
+	// On Unix (including macOS), we can delete/rename a running executable.
+	// The kernel keeps the file open until the process exits.
+	// On Windows, we rename to .old since you can't delete a running executable.
+	//
+	// We use atomic rename for all platforms to avoid issues with:
+	// - macOS code signing (kills process if signed binary is modified in-place)
+	// - Partial writes if interrupted
+
+	oldPath := currentPath + ".old"
+
+	// Remove old backup if exists
+	os.Remove(oldPath)
+
+	// Rename current executable to .old
+	if err := os.Rename(currentPath, oldPath); err != nil {
+		// On Unix, if rename fails, try to remove the current file instead
+		if runtime.GOOS != "windows" {
+			if removeErr := os.Remove(currentPath); removeErr != nil {
+				return fmt.Errorf("failed to remove current executable: %w", err)
+			}
+		} else {
 			return fmt.Errorf("failed to backup current executable: %w", err)
 		}
 	}
 
-	// Copy new file to current location
-	newFile, err := os.Open(newPath)
-	if err != nil {
-		return fmt.Errorf("failed to open new file: %w", err)
-	}
-	defer newFile.Close()
+	// Move new file to current location
+	if err := os.Rename(newPath, currentPath); err != nil {
+		// Rename failed, try copy as fallback
+		newFile, err := os.Open(newPath)
+		if err != nil {
+			return fmt.Errorf("failed to open new file: %w", err)
+		}
+		defer newFile.Close()
 
-	// Create destination file
-	destFile, err := os.OpenFile(currentPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer destFile.Close()
+		destFile, err := os.OpenFile(currentPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create destination file: %w", err)
+		}
+		defer destFile.Close()
 
-	if _, err := io.Copy(destFile, newFile); err != nil {
-		return fmt.Errorf("failed to copy new executable: %w", err)
+		if _, err := io.Copy(destFile, newFile); err != nil {
+			return fmt.Errorf("failed to copy new executable: %w", err)
+		}
+
+		os.Remove(newPath)
 	}
 
-	// Clean up
-	os.Remove(newPath)
-	if runtime.GOOS == "windows" {
-		// Try to remove old file (may fail if still in use)
-		os.Remove(currentPath + ".old")
-	}
+	// Clean up old file
+	// On Windows this may fail if still in use, which is fine
+	os.Remove(oldPath)
 
 	return nil
 }
