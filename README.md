@@ -150,14 +150,14 @@ At minimum, you need to configure:
   "bedrock": {
     "awsProfile": "YOUR_AWS_PROFILE",
     "awsRegion": "us-east-2",
-    "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+    "model": "us.anthropic.claude-opus-4-6-v1",
     "maxOutputTokens": 8192,
     "maxThinkingTokens": 1024
   },
   "litellm": {
     "baseUrl": "https://your-litellm-proxy.example.com",
     "authToken": "YOUR_AUTH_TOKEN",
-    "model": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+    "model": "bedrock/us.anthropic.claude-opus-4-6-v1",
     "maxOutputTokens": 8192,
     "maxThinkingTokens": 1024
   }
@@ -208,7 +208,7 @@ Used when `mode` is set to `bedrock`.
 |-------|-------------|---------|
 | `awsProfile` | AWS profile name for authentication | *Required* |
 | `awsRegion` | AWS region for Bedrock | `us-east-2` |
-| `model` | Anthropic model ID | `us.anthropic.claude-opus-4-5-20251101-v1:0` |
+| `model` | Anthropic model ID | `us.anthropic.claude-opus-4-6-v1` |
 | `maxOutputTokens` | Maximum output tokens | `8192` |
 | `maxThinkingTokens` | Maximum thinking tokens | `1024` |
 
@@ -228,7 +228,7 @@ Used when `mode` is set to `litellm`.
 |-------|-------------|---------|
 | `baseUrl` | LiteLLM proxy base URL | *Required* |
 | `authToken` | Authentication token for LiteLLM | *Required* |
-| `model` | Model name | `us.anthropic.claude-opus-4-5-20251101-v1:0` |
+| `model` | Model name | `bedrock/us.anthropic.claude-opus-4-6-v1` |
 | `maxOutputTokens` | Maximum output tokens | `8192` |
 | `maxThinkingTokens` | Maximum thinking tokens | `1024` |
 
@@ -344,7 +344,7 @@ When you run `gantry`, it displays a confirmation screen showing all the configu
 ║    Mode:            bedrock (from config)                        ║
 ║    AWS Profile:     my-profile                                   ║
 ║    Region:          us-east-2                                    ║
-║    Model:           us.anthropic.claude-opus-4-5-20251101-v1:0   ║
+║    Model:           us.anthropic.claude-opus-4-6-v1              ║
 ║                                                                  ║
 ║  POWERLINE STATUS BAR                                            ║
 ║    Action:          Ignored (no changes will be made)            ║

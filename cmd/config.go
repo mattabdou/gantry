@@ -450,7 +450,7 @@ func editConfig() {
 
 	bedrockModel := cfg.Bedrock.Model
 	if bedrockModel == "" {
-		bedrockModel = "us.anthropic.claude-opus-4-5-20251101-v1:0"
+		bedrockModel = "us.anthropic.claude-opus-4-6-v1"
 	}
 	cfg.Bedrock.Model = prompt(scanner, "Anthropic Model", bedrockModel)
 
@@ -476,7 +476,7 @@ func editConfig() {
 
 	litellmModel := cfg.LiteLLM.Model
 	if litellmModel == "" {
-		litellmModel = "us.anthropic.claude-opus-4-5-20251101-v1:0"
+		litellmModel = "bedrock/us.anthropic.claude-opus-4-6-v1"
 	}
 	cfg.LiteLLM.Model = prompt(scanner, "Anthropic Model", litellmModel)
 

@@ -385,6 +385,87 @@ func TestBuildEnvironmentLiteLLMFiltersInheritedBedrockVars(t *testing.T) {
 	}
 }
 
+func TestBuildEnvironmentDisableExperimentalBetas(t *testing.T) {
+	// Unset the env var if it's already set in the current environment
+	if val, ok := os.LookupEnv("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"); ok {
+		os.Unsetenv("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS")
+		defer os.Setenv("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", val)
+	}
+
+	tests := []struct {
+		name      string
+		cctConfig *config.ClaudeCodeTerminalConfig
+		wantSet   bool
+		wantValue string
+	}{
+		{
+			name: "disableExperimentalBetas=1 sets env var",
+			cctConfig: func() *config.ClaudeCodeTerminalConfig {
+				val := 1
+				return &config.ClaudeCodeTerminalConfig{DisableExperimentalBetas: &val}
+			}(),
+			wantSet:   true,
+			wantValue: "1",
+		},
+		{
+			name: "disableExperimentalBetas=0 does not set env var",
+			cctConfig: func() *config.ClaudeCodeTerminalConfig {
+				val := 0
+				return &config.ClaudeCodeTerminalConfig{DisableExperimentalBetas: &val}
+			}(),
+			wantSet: false,
+		},
+		{
+			name:      "nil claudeCodeTerminal does not set env var",
+			cctConfig: nil,
+			wantSet:   false,
+		},
+		{
+			name:      "nil disableExperimentalBetas does not set env var",
+			cctConfig: &config.ClaudeCodeTerminalConfig{DisableExperimentalBetas: nil},
+			wantSet:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			globalConfig := &config.GlobalConfig{
+				OTEL: config.OTELConfig{
+					Endpoint: "https://collector.example.com/otlp",
+				},
+				Bedrock: &config.BedrockConfig{
+					AWSProfile: "test-profile",
+					AWSRegion:  "us-east-2",
+				},
+				ClaudeCodeTerminal: tt.cctConfig,
+			}
+
+			env := BuildEnvironment(globalConfig, "", "bedrock")
+
+			envMap := make(map[string]string)
+			for _, e := range env {
+				parts := strings.SplitN(e, "=", 2)
+				if len(parts) == 2 {
+					envMap[parts[0]] = parts[1]
+				}
+			}
+
+			val, ok := envMap["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"]
+			if tt.wantSet {
+				if !ok {
+					t.Error("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS should be set")
+				} else if val != tt.wantValue {
+					t.Errorf("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = %q, want %q", val, tt.wantValue)
+				}
+			} else {
+				if ok {
+					t.Errorf("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS should not be set, got %q", val)
+				}
+			}
+		})
+	}
+}
+
 func TestBuildEnvironmentPreservesExisting(t *testing.T) {
 	// Set an existing env var
 	os.Setenv("TEST_EXISTING_VAR", "existing_value")

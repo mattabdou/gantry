@@ -253,6 +253,9 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 			"apiKey":  litellmConfig.AuthToken,
 		},
 		"models": map[string]interface{}{
+			"bedrock/us.anthropic.claude-opus-4-6-v1": map[string]interface{}{
+				"name": "Claude Opus 4.6",
+			},
 			"us.anthropic.claude-opus-4-5-20251101-v1:0": map[string]interface{}{
 				"name": "Claude Opus 4.5",
 			},
@@ -265,9 +268,9 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 		},
 	}
 
-	// Set default model to use gantry-litellm provider with Opus 4.5
+	// Set default model to use gantry-litellm provider with Opus 4
 	// Format is "provider/model"
-	cfg["model"] = "gantry-litellm/us.anthropic.claude-opus-4-5-20251101-v1:0"
+	cfg["model"] = "gantry-litellm/bedrock/us.anthropic.claude-opus-4-6-v1"
 
 	// Use opencode.json for new configs (not jsonc)
 	if !ConfigExists() {
@@ -355,6 +358,9 @@ func ConfigureBedrock(bedrockConfig *config.BedrockConfig) (*ConfigureResult, er
 		"name":    "Gantry Bedrock",
 		"options": bedrockOpts,
 		"models": map[string]interface{}{
+			"us.anthropic.claude-opus-4-6-v1": map[string]interface{}{
+				"name": "Claude Opus 4.6",
+			},
 			"us.anthropic.claude-opus-4-5-20251101-v1:0": map[string]interface{}{
 				"name": "Claude Opus 4.5",
 			},
@@ -372,9 +378,9 @@ func ConfigureBedrock(bedrockConfig *config.BedrockConfig) (*ConfigureResult, er
 		"options": bedrockOpts,
 	}
 
-	// Set default model to use gantry-bedrock provider with Opus 4.5
+	// Set default model to use gantry-bedrock provider with Opus 4
 	// Format is "provider/model"
-	cfg["model"] = "gantry-bedrock/us.anthropic.claude-opus-4-5-20251101-v1:0"
+	cfg["model"] = "gantry-bedrock/us.anthropic.claude-opus-4-6-v1"
 
 	// Use opencode.json for new configs (not jsonc)
 	if !ConfigExists() {

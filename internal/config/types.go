@@ -2,11 +2,12 @@ package config
 
 // GlobalConfig represents the ~/.gantryrc.json configuration file
 type GlobalConfig struct {
-	Gantry    *GantryConfig    `json:"gantry,omitempty"`
-	OTEL      OTELConfig       `json:"otel"`
-	Bedrock   *BedrockConfig   `json:"bedrock,omitempty"`
-	LiteLLM   *LiteLLMConfig   `json:"litellm,omitempty"`
-	Powerline *PowerlineConfig `json:"powerline,omitempty"`
+	Gantry             *GantryConfig             `json:"gantry,omitempty"`
+	OTEL               OTELConfig                `json:"otel"`
+	Bedrock            *BedrockConfig            `json:"bedrock,omitempty"`
+	LiteLLM            *LiteLLMConfig            `json:"litellm,omitempty"`
+	Powerline          *PowerlineConfig          `json:"powerline,omitempty"`
+	ClaudeCodeTerminal *ClaudeCodeTerminalConfig `json:"claudeCodeTerminal,omitempty"`
 }
 
 // GantryConfig contains GANTRY-specific configuration
@@ -60,6 +61,11 @@ type LiteLLMConfig struct {
 type PowerlineConfig struct {
 	Theme string `json:"theme,omitempty"`
 	Style string `json:"style,omitempty"`
+}
+
+// ClaudeCodeTerminalConfig contains Claude Code terminal-specific settings
+type ClaudeCodeTerminalConfig struct {
+	DisableExperimentalBetas *int `json:"disableExperimentalBetas,omitempty"` // 1 to disable (default), 0 to enable
 }
 
 // ProjectConfig represents the .gantry.json project configuration file

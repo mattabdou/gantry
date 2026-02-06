@@ -63,6 +63,23 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 		_ = SaveGlobalConfig(&config)
 	}
 
+	// Auto-migrate: add claudeCodeTerminal section with defaults if missing
+	migrateCCT := false
+	if config.ClaudeCodeTerminal == nil {
+		defaultVal := 1
+		config.ClaudeCodeTerminal = &ClaudeCodeTerminalConfig{
+			DisableExperimentalBetas: &defaultVal,
+		}
+		migrateCCT = true
+	} else if config.ClaudeCodeTerminal.DisableExperimentalBetas == nil {
+		defaultVal := 1
+		config.ClaudeCodeTerminal.DisableExperimentalBetas = &defaultVal
+		migrateCCT = true
+	}
+	if migrateCCT {
+		_ = SaveGlobalConfig(&config)
+	}
+
 	if err := ValidateGlobalConfig(&config); err != nil {
 		return nil, err
 	}
@@ -178,6 +195,14 @@ func ValidateGlobalConfig(config *GlobalConfig) error {
 	// Validate defaultTool if specified
 	if config.Gantry.DefaultTool != "" && !IsValidTool(config.Gantry.DefaultTool) {
 		return fmt.Errorf("global config \"gantry.defaultTool\" has invalid value %q - must be one of: cc, oc, ocd", config.Gantry.DefaultTool)
+	}
+
+	// Validate claudeCodeTerminal section
+	if config.ClaudeCodeTerminal != nil && config.ClaudeCodeTerminal.DisableExperimentalBetas != nil {
+		val := *config.ClaudeCodeTerminal.DisableExperimentalBetas
+		if val != 0 && val != 1 {
+			return fmt.Errorf("global config \"claudeCodeTerminal.disableExperimentalBetas\" must be 0 or 1, got %d", val)
+		}
 	}
 
 	// Validate OTEL section
@@ -307,14 +332,14 @@ func GetDefaultGlobalConfigTemplate() *GlobalConfig {
 		Bedrock: &BedrockConfig{
 			AWSProfile:        "YOUR_AWS_PROFILE",
 			AWSRegion:         "us-east-2",
-			Model:             "us.anthropic.claude-opus-4-5-20251101-v1:0",
+			Model:             "us.anthropic.claude-opus-4-6-v1",
 			MaxOutputTokens:   8192,
 			MaxThinkingTokens: 1024,
 		},
 		LiteLLM: &LiteLLMConfig{
 			BaseURL:           "https://your-litellm-proxy.example.com",
 			AuthToken:         "YOUR_AUTH_TOKEN_HERE",
-			Model:             "us.anthropic.claude-opus-4-5-20251101-v1:0",
+			Model:             "bedrock/us.anthropic.claude-opus-4-6-v1",
 			MaxOutputTokens:   8192,
 			MaxThinkingTokens: 1024,
 		},

@@ -158,6 +158,56 @@ func TestValidateGlobalConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "valid disableExperimentalBetas 1",
+			config: func() *GlobalConfig {
+				val := 1
+				return &GlobalConfig{
+					Gantry: &GantryConfig{Username: "john.doe"},
+					OTEL:   OTELConfig{Endpoint: "https://collector.example.com/otlp"},
+					ClaudeCodeTerminal: &ClaudeCodeTerminalConfig{
+						DisableExperimentalBetas: &val,
+					},
+				}
+			}(),
+			wantErr: false,
+		},
+		{
+			name: "valid disableExperimentalBetas 0",
+			config: func() *GlobalConfig {
+				val := 0
+				return &GlobalConfig{
+					Gantry: &GantryConfig{Username: "john.doe"},
+					OTEL:   OTELConfig{Endpoint: "https://collector.example.com/otlp"},
+					ClaudeCodeTerminal: &ClaudeCodeTerminalConfig{
+						DisableExperimentalBetas: &val,
+					},
+				}
+			}(),
+			wantErr: false,
+		},
+		{
+			name: "invalid disableExperimentalBetas",
+			config: func() *GlobalConfig {
+				val := 2
+				return &GlobalConfig{
+					Gantry: &GantryConfig{Username: "john.doe"},
+					OTEL:   OTELConfig{Endpoint: "https://collector.example.com/otlp"},
+					ClaudeCodeTerminal: &ClaudeCodeTerminalConfig{
+						DisableExperimentalBetas: &val,
+					},
+				}
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "nil claudeCodeTerminal is valid",
+			config: &GlobalConfig{
+				Gantry: &GantryConfig{Username: "john.doe"},
+				OTEL:   OTELConfig{Endpoint: "https://collector.example.com/otlp"},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

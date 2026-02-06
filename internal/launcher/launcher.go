@@ -174,6 +174,13 @@ func BuildEnvironment(globalConfig *config.GlobalConfig, resourceAttributes stri
 	// Resource attributes (our custom attributes)
 	addEnv("OTEL_RESOURCE_ATTRIBUTES", resourceAttributes)
 
+	// Claude Code terminal-specific settings
+	if globalConfig.ClaudeCodeTerminal != nil && globalConfig.ClaudeCodeTerminal.DisableExperimentalBetas != nil {
+		if *globalConfig.ClaudeCodeTerminal.DisableExperimentalBetas == 1 {
+			addEnv("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", "1")
+		}
+	}
+
 	// Provider-specific configuration based on mode
 	if mode == "bedrock" && globalConfig.Bedrock != nil {
 		bedrock := globalConfig.Bedrock
