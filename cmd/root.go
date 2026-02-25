@@ -128,7 +128,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 			return
 		}
 		// Handle subcommands
-		if arg == "init" || arg == "config" || arg == "update" || arg == "version" || arg == "models" {
+		if arg == "init" || arg == "config" || arg == "update" || arg == "version" || arg == "models" || arg == "cost" {
 			// Re-enable cobra to handle subcommand
 			cmd.DisableFlagParsing = false
 			cmd.SetArgs(args)
@@ -636,6 +636,7 @@ Usage:
   gantry config get <key>                   Get a configuration value
   gantry config set <key> <val>             Set a configuration value
   gantry models                             List available models from LiteLLM
+  gantry cost [numberOfDays]                Show AI API spend from LiteLLM
   gantry update                             Update gantry to the latest version
   gantry update --check                     Check if an update is available
   gantry version                            Show version information
