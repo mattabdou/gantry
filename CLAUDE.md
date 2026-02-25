@@ -19,6 +19,7 @@ gantry/
 │   ├── init.go                 # 'gantry init' - creates ~/.gantryrc.json
 │   ├── config.go               # 'gantry config' - interactive/CLI config management
 │   ├── models.go               # 'gantry models' - list LiteLLM models
+│   ├── cost.go                 # 'gantry cost' - show API spend from LiteLLM
 │   ├── version.go              # 'gantry version' - displays version info
 │   └── update.go               # 'gantry update' - self-update functionality
 ├── internal/
@@ -143,7 +144,7 @@ Dot notation for get/set operations (e.g., `gantry config set otel.endpoint http
   - Linux: `/usr/bin/opencode-desktop`, desktop entries
 
 ### Command Structure
-Uses Cobra with `DisableFlagParsing: true` on root command to pass unknown flags through to the AI tool. Subcommands (init, config, update, version, models) are detected and handled specially in `root.go:runGantry()`.
+Uses Cobra with `DisableFlagParsing: true` on root command to pass unknown flags through to the AI tool. Subcommands (init, config, update, version, models, cost) are detected and handled specially in `root.go:runGantry()`.
 
 ### Self-Update
 Downloads platform-specific binary from GitHub releases (`mattabdou/gantry`), replaces current executable. Supports two release channels:
