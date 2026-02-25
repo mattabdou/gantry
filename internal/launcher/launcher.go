@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -45,36 +46,43 @@ func GetGitBranch() string {
 	return strings.TrimSpace(string(output))
 }
 
+// encodeAttrValue percent-encodes a value for use in OTEL_RESOURCE_ATTRIBUTES.
+// Per the OTel spec, values must be URL-encoded when they contain special characters
+// such as commas, equals signs, backslashes, or colons (common in Windows paths).
+func encodeAttrValue(v string) string {
+	return url.QueryEscape(v)
+}
+
 // BuildResourceAttributes builds the OTEL_RESOURCE_ATTRIBUTES string from all sources
 func BuildResourceAttributes(username, workingPath string, projectConfig *config.ProjectConfigResult, gitBranch string) string {
 	var attributes []string
 
 	// Always include username and working path
-	attributes = append(attributes, "gantry.username="+username)
-	attributes = append(attributes, "gantry.working_path="+workingPath)
+	attributes = append(attributes, "gantry.username="+encodeAttrValue(username))
+	attributes = append(attributes, "gantry.working_path="+encodeAttrValue(workingPath))
 
 	// Project config attributes
 	projectName := "Unknown"
 	if projectConfig != nil && projectConfig.Config.ProjectName != "" {
 		projectName = projectConfig.Config.ProjectName
 	}
-	attributes = append(attributes, "gantry.project_name="+projectName)
+	attributes = append(attributes, "gantry.project_name="+encodeAttrValue(projectName))
 
 	if projectConfig != nil {
 		if projectConfig.Config.Repository != "" {
-			attributes = append(attributes, "gantry.repository="+projectConfig.Config.Repository)
+			attributes = append(attributes, "gantry.repository="+encodeAttrValue(projectConfig.Config.Repository))
 		}
 		if projectConfig.Config.Team != "" {
-			attributes = append(attributes, "gantry.team="+projectConfig.Config.Team)
+			attributes = append(attributes, "gantry.team="+encodeAttrValue(projectConfig.Config.Team))
 		}
 		if projectConfig.Config.CostCenter != "" {
-			attributes = append(attributes, "gantry.cost_center="+projectConfig.Config.CostCenter)
+			attributes = append(attributes, "gantry.cost_center="+encodeAttrValue(projectConfig.Config.CostCenter))
 		}
 	}
 
 	// Git branch if available
 	if gitBranch != "" {
-		attributes = append(attributes, "gantry.git_branch="+gitBranch)
+		attributes = append(attributes, "gantry.git_branch="+encodeAttrValue(gitBranch))
 	}
 
 	return strings.Join(attributes, ",")

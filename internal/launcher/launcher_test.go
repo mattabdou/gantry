@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -34,6 +35,31 @@ func TestGetClaudeCommand(t *testing.T) {
 	}
 }
 
+func TestEncodeAttrValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"simple string", "testuser", "testuser"},
+		{"string with spaces", "my project", "my+project"},
+		{"unix path", "/path/to/project", url.QueryEscape("/path/to/project")},
+		{"windows path", `C:\Users\john\projects`, url.QueryEscape(`C:\Users\john\projects`)},
+		{"string with commas", "a,b,c", "a%2Cb%2Cc"},
+		{"string with equals", "key=value", "key%3Dvalue"},
+		{"empty string", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := encodeAttrValue(tt.input)
+			if got != tt.expected {
+				t.Errorf("encodeAttrValue(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestBuildResourceAttributes(t *testing.T) {
 	username := "testuser"
 	workingPath := "/path/to/project"
@@ -51,18 +77,18 @@ func TestBuildResourceAttributes(t *testing.T) {
 	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
 
 	expectedParts := []string{
-		"gantry.username=testuser",
-		"gantry.working_path=/path/to/project",
-		"gantry.project_name=test-project",
-		"gantry.repository=github.com/test/repo",
-		"gantry.team=platform",
-		"gantry.cost_center=ENG-001",
-		"gantry.git_branch=feature/test",
+		"gantry.username=" + url.QueryEscape("testuser"),
+		"gantry.working_path=" + url.QueryEscape("/path/to/project"),
+		"gantry.project_name=" + url.QueryEscape("test-project"),
+		"gantry.repository=" + url.QueryEscape("github.com/test/repo"),
+		"gantry.team=" + url.QueryEscape("platform"),
+		"gantry.cost_center=" + url.QueryEscape("ENG-001"),
+		"gantry.git_branch=" + url.QueryEscape("feature/test"),
 	}
 
 	for _, expected := range expectedParts {
 		if !strings.Contains(result, expected) {
-			t.Errorf("BuildResourceAttributes() missing %v", expected)
+			t.Errorf("BuildResourceAttributes() missing %v in result: %v", expected, result)
 		}
 	}
 }
@@ -80,14 +106,14 @@ func TestBuildResourceAttributesMinimal(t *testing.T) {
 
 	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
 
-	// Should contain required attributes
-	if !strings.Contains(result, "gantry.username=testuser") {
+	// Should contain required attributes (URL-encoded)
+	if !strings.Contains(result, "gantry.username="+url.QueryEscape("testuser")) {
 		t.Error("Missing username")
 	}
-	if !strings.Contains(result, "gantry.working_path=/path/to/project") {
+	if !strings.Contains(result, "gantry.working_path="+url.QueryEscape("/path/to/project")) {
 		t.Error("Missing working_path")
 	}
-	if !strings.Contains(result, "gantry.project_name=test-project") {
+	if !strings.Contains(result, "gantry.project_name="+url.QueryEscape("test-project")) {
 		t.Error("Missing project_name")
 	}
 
@@ -107,9 +133,49 @@ func TestBuildResourceAttributesNilProject(t *testing.T) {
 
 	result := BuildResourceAttributes(username, workingPath, nil, gitBranch)
 
-	// Should use "Unknown" for project name
+	// Should use "Unknown" for project name (URL-encoded, though "Unknown" has no special chars)
 	if !strings.Contains(result, "gantry.project_name=Unknown") {
 		t.Error("Should use 'Unknown' for nil project config")
+	}
+}
+
+func TestBuildResourceAttributesWindowsPath(t *testing.T) {
+	username := "jsmith"
+	workingPath := `C:\Users\jsmith\projects\myapp`
+	gitBranch := "main"
+
+	projectConfig := &config.ProjectConfigResult{
+		Config: config.ProjectConfig{
+			ProjectName: "my-app",
+		},
+	}
+
+	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
+
+	// Windows path must be properly URL-encoded so backslashes and colons don't break parsing
+	expectedPath := "gantry.working_path=" + url.QueryEscape(`C:\Users\jsmith\projects\myapp`)
+	if !strings.Contains(result, expectedPath) {
+		t.Errorf("Windows path not properly encoded.\nExpected to contain: %s\nGot: %s", expectedPath, result)
+	}
+
+	// Verify the result is parseable: split by comma, then each part by first '='
+	parts := strings.Split(result, ",")
+	for _, part := range parts {
+		eqIdx := strings.Index(part, "=")
+		if eqIdx == -1 {
+			t.Errorf("Attribute part missing '=': %s", part)
+			continue
+		}
+		key := part[:eqIdx]
+		value := part[eqIdx+1:]
+		// Each value should be decodable
+		decoded, err := url.QueryUnescape(value)
+		if err != nil {
+			t.Errorf("Value for key %s is not valid URL encoding: %s (error: %v)", key, value, err)
+		}
+		if key == "gantry.working_path" && decoded != workingPath {
+			t.Errorf("Decoded working_path = %q, want %q", decoded, workingPath)
+		}
 	}
 }
 
