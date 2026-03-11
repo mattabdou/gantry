@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
@@ -368,6 +370,56 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Auto-update if enabled and update is available
+	if updateAvailable && os.Getenv("GANTRY_AUTO_UPDATED") == "" {
+		autoUpdate := true // default
+		if globalConfig.Gantry != nil && globalConfig.Gantry.AutoUpdate != nil {
+			autoUpdate = *globalConfig.Gantry.AutoUpdate
+		}
+		if autoUpdate {
+			fmt.Printf("Updating gantry to v%s...\n", latestVersion)
+			release, err := updater.GetLatestReleaseForChannel(releaseChannel)
+			if err == nil {
+				tmpPath, err := updater.DownloadRelease(release)
+				if err == nil {
+					if err := updater.ReplaceExecutable(tmpPath); err == nil {
+						fmt.Printf("Update complete, restarting...\n\n")
+						exe, err := updater.GetExecutablePath()
+						if err == nil {
+							os.Setenv("GANTRY_AUTO_UPDATED", "1")
+							if runtime.GOOS == "windows" {
+								// Windows: spawn new process and exit
+								proc, err := os.StartProcess(exe, append([]string{exe}, os.Args[1:]...), &os.ProcAttr{
+									Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+									Env:   os.Environ(),
+								})
+								if err == nil {
+									proc.Release()
+									os.Exit(0)
+								}
+								fmt.Fprintf(os.Stderr, "Warning: failed to restart after update: %v\n", err)
+							} else {
+								// Unix: replace current process
+								err := syscall.Exec(exe, append([]string{exe}, os.Args[1:]...), os.Environ())
+								// If we get here, exec failed
+								fmt.Fprintf(os.Stderr, "Warning: failed to restart after update: %v\n", err)
+							}
+						} else {
+							fmt.Fprintf(os.Stderr, "Warning: updated but failed to restart: %v\n", err)
+						}
+					} else {
+						fmt.Fprintf(os.Stderr, "Warning: auto-update failed to install: %v\n", err)
+					}
+				} else {
+					fmt.Fprintf(os.Stderr, "Warning: auto-update failed to download: %v\n", err)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: auto-update failed to fetch release: %v\n", err)
+			}
+			// Continue normally if auto-update failed
+		}
+	}
+
 	// ============================================
 	// PHASE 2: Show confirmation screen (if enabled)
 	// ============================================
@@ -545,7 +597,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	}
 
 	// Build resource attributes (for Claude Code telemetry)
-	resourceAttributes := launcher.BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
+	resourceAttributes := launcher.BuildResourceAttributes(username, workingPath, projectConfig, gitBranch, Version)
 
 	// Build environment based on mode (for Claude Code)
 	env := launcher.BuildEnvironment(globalConfig, resourceAttributes, mode)
@@ -636,7 +688,7 @@ Usage:
   gantry config get <key>                   Get a configuration value
   gantry config set <key> <val>             Set a configuration value
   gantry models                             List available models from LiteLLM
-  gantry cost                               Show AI API spend from LiteLLM
+  gantry cost [numberOfDays]                Show AI API spend from telemetry data
   gantry update                             Update gantry to the latest version
   gantry update --check                     Check if an update is available
   gantry version                            Show version information

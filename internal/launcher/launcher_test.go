@@ -74,11 +74,12 @@ func TestBuildResourceAttributes(t *testing.T) {
 		},
 	}
 
-	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
+	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch, "1.2.0")
 
 	expectedParts := []string{
 		"gantry.username=" + url.QueryEscape("testuser"),
 		"gantry.working_path=" + url.QueryEscape("/path/to/project"),
+		"gantry.version=1.2.0",
 		"gantry.project_name=" + url.QueryEscape("test-project"),
 		"gantry.repository=" + url.QueryEscape("github.com/test/repo"),
 		"gantry.team=" + url.QueryEscape("platform"),
@@ -104,7 +105,7 @@ func TestBuildResourceAttributesMinimal(t *testing.T) {
 		},
 	}
 
-	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
+	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch, "1.2.0")
 
 	// Should contain required attributes (URL-encoded)
 	if !strings.Contains(result, "gantry.username="+url.QueryEscape("testuser")) {
@@ -112,6 +113,9 @@ func TestBuildResourceAttributesMinimal(t *testing.T) {
 	}
 	if !strings.Contains(result, "gantry.working_path="+url.QueryEscape("/path/to/project")) {
 		t.Error("Missing working_path")
+	}
+	if !strings.Contains(result, "gantry.version=1.2.0") {
+		t.Error("Missing version")
 	}
 	if !strings.Contains(result, "gantry.project_name="+url.QueryEscape("test-project")) {
 		t.Error("Missing project_name")
@@ -131,7 +135,7 @@ func TestBuildResourceAttributesNilProject(t *testing.T) {
 	workingPath := "/path/to/project"
 	gitBranch := ""
 
-	result := BuildResourceAttributes(username, workingPath, nil, gitBranch)
+	result := BuildResourceAttributes(username, workingPath, nil, gitBranch, "1.2.0")
 
 	// Should use "Unknown" for project name (URL-encoded, though "Unknown" has no special chars)
 	if !strings.Contains(result, "gantry.project_name=Unknown") {
@@ -150,7 +154,7 @@ func TestBuildResourceAttributesWindowsPath(t *testing.T) {
 		},
 	}
 
-	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch)
+	result := BuildResourceAttributes(username, workingPath, projectConfig, gitBranch, "1.2.0")
 
 	// Windows path must be properly URL-encoded so backslashes and colons don't break parsing
 	expectedPath := "gantry.working_path=" + url.QueryEscape(`C:\Users\jsmith\projects\myapp`)

@@ -63,6 +63,13 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 		_ = SaveGlobalConfig(&config)
 	}
 
+	// Auto-migrate: add autoUpdate if missing (default: true)
+	if config.Gantry != nil && config.Gantry.AutoUpdate == nil {
+		trueVal := true
+		config.Gantry.AutoUpdate = &trueVal
+		_ = SaveGlobalConfig(&config)
+	}
+
 	// Auto-migrate: add claudeCodeTerminal section with defaults if missing
 	migrateCCT := false
 	if config.ClaudeCodeTerminal == nil {
@@ -246,6 +253,11 @@ func FindProjectConfig(startDir string) *ProjectConfigResult {
 				fmt.Fprintf(os.Stderr, "Warning: Invalid JSON in %s, skipping\n", configPath)
 				currentDir = filepath.Dir(currentDir)
 				continue
+			}
+
+			// If projectName is empty, infer from git directory
+			if config.ProjectName == "" {
+				config.ProjectName = findProjectNameFromGit(startDir)
 			}
 
 			return &ProjectConfigResult{
@@ -457,7 +469,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 		"logUserPrompts": true, "includeSessionId": true,
 		"includeVersion": true, "includeAccountUuid": true,
 		"ignorePowerline": true, "enablePowerline": true, "bypassLoadingScreen": true,
-		"checkForUpdateOnLaunch": true,
+		"checkForUpdateOnLaunch": true, "autoUpdate": true,
 	}
 	numberKeys := map[string]bool{
 		"metricExportInterval": true, "logsExportInterval": true,

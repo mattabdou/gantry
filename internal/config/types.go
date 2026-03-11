@@ -19,6 +19,7 @@ type GantryConfig struct {
 	IgnorePowerline        *bool  `json:"ignorePowerline,omitempty"`
 	EnablePowerline        *bool  `json:"enablePowerline,omitempty"`
 	BypassLoadingScreen    *bool  `json:"bypassLoadingScreen,omitempty"`
+	AutoUpdate             *bool  `json:"autoUpdate,omitempty"`             // Auto-update gantry on launch when update available
 	CheckForUpdateOnLaunch *bool  `json:"checkForUpdateOnLaunch,omitempty"`
 	LastUpdateCheck        string `json:"lastUpdateCheck,omitempty"`  // RFC3339 timestamp of last update check
 	LastUpdateResult       string `json:"lastUpdateResult,omitempty"` // Cached latest version from last check

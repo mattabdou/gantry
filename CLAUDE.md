@@ -19,7 +19,7 @@ gantry/
 │   ├── init.go                 # 'gantry init' - creates ~/.gantryrc.json
 │   ├── config.go               # 'gantry config' - interactive/CLI config management
 │   ├── models.go               # 'gantry models' - list LiteLLM models
-│   ├── cost.go                 # 'gantry cost' - show API spend from LiteLLM
+│   ├── cost.go                 # 'gantry cost' - show API spend from telemetry data
 │   ├── version.go              # 'gantry version' - displays version info
 │   └── update.go               # 'gantry update' - self-update functionality
 ├── internal/
@@ -101,7 +101,7 @@ GANTRY sets the following environment variables for Claude Code:
 - `CLAUDE_CODE_ENABLE_TELEMETRY=1`
 - `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`
 - `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`
-- `OTEL_RESOURCE_ATTRIBUTES` (contains gantry.username, gantry.project_name, gantry.git_branch, etc.)
+- `OTEL_RESOURCE_ATTRIBUTES` (contains gantry.username, gantry.version, gantry.project_name, gantry.git_branch, etc.)
 
 **Bedrock mode:**
 - `CLAUDE_CODE_USE_BEDROCK=1`

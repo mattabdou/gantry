@@ -54,12 +54,13 @@ func encodeAttrValue(v string) string {
 }
 
 // BuildResourceAttributes builds the OTEL_RESOURCE_ATTRIBUTES string from all sources
-func BuildResourceAttributes(username, workingPath string, projectConfig *config.ProjectConfigResult, gitBranch string) string {
+func BuildResourceAttributes(username, workingPath string, projectConfig *config.ProjectConfigResult, gitBranch string, version string) string {
 	var attributes []string
 
-	// Always include username and working path
+	// Always include username, working path, and gantry version
 	attributes = append(attributes, "gantry.username="+encodeAttrValue(username))
 	attributes = append(attributes, "gantry.working_path="+encodeAttrValue(workingPath))
+	attributes = append(attributes, "gantry.version="+encodeAttrValue(version))
 
 	// Project config attributes
 	projectName := "Unknown"
