@@ -129,11 +129,27 @@ func parseShellFlag(args []string) (shellMode bool, filteredArgs []string) {
 	return shellMode, filteredArgs
 }
 
+// parseResetConfigFlag extracts --resetconfig or -r flag from args
+func parseResetConfigFlag(args []string) (resetConfig bool, filteredArgs []string) {
+	filteredArgs = make([]string, 0, len(args))
+
+	for _, arg := range args {
+		if arg == "--resetconfig" || arg == "-r" {
+			resetConfig = true
+			continue
+		}
+		filteredArgs = append(filteredArgs, arg)
+	}
+
+	return resetConfig, filteredArgs
+}
+
 func runGantry(cmd *cobra.Command, args []string) {
-	// Parse --mode, --tool, and --shell flags from args before other processing
+	// Parse --mode, --tool, --shell, and --resetconfig flags from args before other processing
 	modeFlag, filteredArgs := parseModeFlag(args)
 	toolFlag, filteredArgs := parseToolFlag(filteredArgs)
 	shellMode, filteredArgs := parseShellFlag(filteredArgs)
+	resetConfig, filteredArgs := parseResetConfigFlag(filteredArgs)
 
 	// Handle --help and --version flags manually since we disabled flag parsing
 	for _, arg := range filteredArgs {
@@ -307,6 +323,51 @@ func runGantry(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 		}
+	}
+
+	// Handle --resetconfig flag
+	if resetConfig {
+		// Determine tool display name for confirmation message
+		var resetToolName string
+		var resetFilePath string
+		switch tool {
+		case "cc":
+			resetToolName = "Claude Code"
+			settingsPath, _ := powerline.GetClaudeSettingsPath()
+			resetFilePath = settingsPath
+		case "oc", "ocd":
+			resetToolName = "OpenCode"
+			configPath, _ := opencode.GetConfigPath()
+			resetFilePath = configPath
+		}
+
+		fmt.Printf("This will revert your %s configuration (%s) to defaults. Proceed? (y/n): ", resetToolName, resetFilePath)
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		if input != "y" {
+			fmt.Println("Cancelled.")
+			return
+		}
+
+		switch tool {
+		case "cc":
+			result, err := powerline.ResetClaudeSettings()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(result.Message)
+		case "oc", "ocd":
+			result, err := opencode.ResetConfig(globalConfig.LiteLLM, globalConfig.Bedrock, mode)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(result.Message)
+		}
+		return
 	}
 
 	// ============================================
@@ -737,6 +798,7 @@ environment, telemetry, and provider settings.
 Usage:
   gantry [options] [tool-args...]           Run AI tool with GANTRY configuration
   gantry --shell [options]                  Start a configured shell session
+  gantry --resetconfig [--tool <tool>]      Reset tool configuration to defaults
   gantry init [--force]                     Create the global configuration file
   gantry config                             Interactive configuration editor
   gantry config show                        Display current configuration
@@ -762,6 +824,9 @@ Options:
 
   --shell, -s                     Launch a configured shell instead of the AI tool
                                   All normal setup is performed; you run commands manually
+
+  --resetconfig, -r               Reset the selected tool's configuration to defaults
+                                  Creates a backup before resetting
 
 Tools:
   cc                              Claude Code - Anthropic's CLI for Claude
@@ -792,6 +857,8 @@ Examples:
   gantry --mode litellm           Start with LiteLLM proxy provider
   gantry --shell                  Start a configured shell (manual tool execution)
   gantry -s -t cc --mode bedrock  Shell with Bedrock Claude Code config
+  gantry --resetconfig            Reset default tool's config to defaults
+  gantry -r -t oc                 Reset OpenCode configuration to defaults
   gantry init                     Initialize global configuration
   gantry init --force             Reinitialize global configuration
   gantry config                   Edit configuration interactively

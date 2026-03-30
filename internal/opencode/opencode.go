@@ -170,10 +170,8 @@ func BackupConfig(configPath string) (string, error) {
 	}
 
 	// Create backup filename with timestamp
-	timestamp := time.Now().Format("2006-01-02T15-04-05")
-	ext := filepath.Ext(configPath)
-	base := configPath[:len(configPath)-len(ext)]
-	backupPath := fmt.Sprintf("%s.backup.%s%s", base, timestamp, ext)
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	backupPath := fmt.Sprintf("%s.%s.gantrybackup", configPath, timestamp)
 
 	// Write the backup
 	if err := os.WriteFile(backupPath, data, 0644); err != nil {
@@ -253,24 +251,24 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 			"apiKey":  litellmConfig.AuthToken,
 		},
 		"models": map[string]interface{}{
-			"bedrock/us.anthropic.claude-opus-4-6-v1": map[string]interface{}{
+			"claude-haiku-4-5-20251001": map[string]interface{}{
+				"name": "Claude Haiku 4.5",
+			},
+			"claude-opus-4-6": map[string]interface{}{
 				"name": "Claude Opus 4.6",
 			},
-			"us.anthropic.claude-opus-4-5-20251101-v1:0": map[string]interface{}{
-				"name": "Claude Opus 4.5",
+			"claude-sonnet-4-6": map[string]interface{}{
+				"name": "Claude Sonnet 4.6",
 			},
-			"us.anthropic.claude-sonnet-4-5-20250929-v1:0": map[string]interface{}{
-				"name": "Claude Sonnet 4.5",
-			},
-			"us.anthropic.claude-haiku-4-5-20251001-v1:0": map[string]interface{}{
-				"name": "Claude Haiku 4.5",
+			"gpt-5.2-codex": map[string]interface{}{
+				"name": "GPT 5.2 Codex",
 			},
 		},
 	}
 
-	// Set default model to use gantry-litellm provider with Opus 4
+	// Set default model to use gantry-litellm provider with Opus 4.6
 	// Format is "provider/model"
-	cfg["model"] = "gantry-litellm/bedrock/us.anthropic.claude-opus-4-6-v1"
+	cfg["model"] = "gantry-litellm/claude-opus-4-6"
 
 	// Use opencode.json for new configs (not jsonc)
 	if !ConfigExists() {
@@ -401,6 +399,51 @@ func ConfigureBedrock(bedrockConfig *config.BedrockConfig) (*ConfigureResult, er
 
 	if backupPath != "" {
 		result.Message = fmt.Sprintf("OpenCode Bedrock configuration updated (backup: %s)", filepath.Base(backupPath))
+	}
+
+	return result, nil
+}
+
+// ResetConfig resets the OpenCode config file to defaults by backing up and recreating it
+func ResetConfig(litellmConfig *config.LiteLLMConfig, bedrockConfig *config.BedrockConfig, mode string) (*ConfigureResult, error) {
+	configPath, err := GetConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create backup if file exists
+	var backupPath string
+	if _, err := os.Stat(configPath); err == nil {
+		backupPath, err = BackupConfig(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create backup: %w", err)
+		}
+
+		// Remove existing config so Configure* creates a fresh one
+		if err := os.Remove(configPath); err != nil {
+			return nil, fmt.Errorf("failed to remove existing config: %w", err)
+		}
+	}
+
+	// Create fresh default config based on mode
+	var result *ConfigureResult
+	if mode == "litellm" && litellmConfig != nil {
+		result, err = ConfigureLiteLLM(litellmConfig)
+	} else if mode == "bedrock" && bedrockConfig != nil {
+		result, err = ConfigureBedrock(bedrockConfig)
+	} else {
+		return nil, fmt.Errorf("no provider config available for mode %q", mode)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	result.BackupPath = backupPath
+	if backupPath != "" {
+		result.Message = fmt.Sprintf("OpenCode configuration reset to defaults (backup: %s)", filepath.Base(backupPath))
+	} else {
+		result.Message = "OpenCode configuration created with defaults"
 	}
 
 	return result, nil

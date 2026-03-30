@@ -93,6 +93,7 @@ make clean          # Remove build artifacts
 - `--tool, -t <tool>` - Override defaultTool. Values: `cc`, `oc`, `ocd`
 - `--mode, -m <mode>` - Override mode. Values: `bedrock`, `litellm`
 - `--shell, -s` - Launch a configured shell instead of the AI tool. All normal setup is performed; the user runs commands manually
+- `--resetconfig, -r` - Reset the selected tool's configuration file to defaults. Creates a timestamped `.gantrybackup` before resetting
 
 ## Environment Variables
 

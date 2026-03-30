@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
 )
@@ -198,4 +199,43 @@ func RemovePowerlineSettings() *UpdateResult {
 		Updated: true,
 		Message: "Removed powerline configuration (disabled)",
 	}
+}
+
+// ResetClaudeSettings backs up and removes ~/.claude/settings.json so Claude Code recreates it with defaults
+func ResetClaudeSettings() (*UpdateResult, error) {
+	settingsPath, err := GetClaudeSettingsPath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get settings path: %w", err)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+		return &UpdateResult{
+			Updated: false,
+			Message: "No Claude Code settings file found, nothing to reset",
+		}, nil
+	}
+
+	// Create backup
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read settings for backup: %w", err)
+	}
+
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	backupPath := fmt.Sprintf("%s.%s.gantrybackup", settingsPath, timestamp)
+
+	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write backup: %w", err)
+	}
+
+	// Remove the settings file
+	if err := os.Remove(settingsPath); err != nil {
+		return nil, fmt.Errorf("failed to remove settings file: %w", err)
+	}
+
+	return &UpdateResult{
+		Updated: true,
+		Message: fmt.Sprintf("Claude Code settings reset to defaults (backup: %s)", filepath.Base(backupPath)),
+	}, nil
 }
