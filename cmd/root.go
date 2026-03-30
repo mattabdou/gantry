@@ -114,10 +114,26 @@ func parseToolFlag(args []string) (tool string, filteredArgs []string) {
 	return tool, filteredArgs
 }
 
+// parseShellFlag extracts --shell or -s flag from args and returns whether shell mode is enabled
+func parseShellFlag(args []string) (shellMode bool, filteredArgs []string) {
+	filteredArgs = make([]string, 0, len(args))
+
+	for _, arg := range args {
+		if arg == "--shell" || arg == "-s" {
+			shellMode = true
+			continue
+		}
+		filteredArgs = append(filteredArgs, arg)
+	}
+
+	return shellMode, filteredArgs
+}
+
 func runGantry(cmd *cobra.Command, args []string) {
-	// Parse --mode and --tool flags from args before other processing
+	// Parse --mode, --tool, and --shell flags from args before other processing
 	modeFlag, filteredArgs := parseModeFlag(args)
 	toolFlag, filteredArgs := parseToolFlag(filteredArgs)
+	shellMode, filteredArgs := parseShellFlag(filteredArgs)
 
 	// Handle --help and --version flags manually since we disabled flag parsing
 	for _, arg := range filteredArgs {
@@ -255,29 +271,41 @@ func runGantry(cmd *cobra.Command, args []string) {
 	case "cc":
 		result := launcher.DetectClaudeCode()
 		if !result.Installed {
-			fmt.Fprintln(os.Stderr, "Error: Claude Code installation not detected.")
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
-			fmt.Fprintln(os.Stderr, "")
-			os.Exit(1)
+			if shellMode {
+				fmt.Fprintln(os.Stderr, "Warning: Claude Code installation not detected. Shell mode will continue.")
+			} else {
+				fmt.Fprintln(os.Stderr, "Error: Claude Code installation not detected.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
+				fmt.Fprintln(os.Stderr, "")
+				os.Exit(1)
+			}
 		}
 	case "oc":
 		result := launcher.DetectOpenCodeTerminal()
 		if !result.Installed {
-			fmt.Fprintln(os.Stderr, "OpenCode Terminal installation not detected.")
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Please visit https://opencode.ai/download to get started with installation.")
-			fmt.Fprintln(os.Stderr, "")
-			os.Exit(1)
+			if shellMode {
+				fmt.Fprintln(os.Stderr, "Warning: OpenCode Terminal installation not detected. Shell mode will continue.")
+			} else {
+				fmt.Fprintln(os.Stderr, "OpenCode Terminal installation not detected.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "Please visit https://opencode.ai/download to get started with installation.")
+				fmt.Fprintln(os.Stderr, "")
+				os.Exit(1)
+			}
 		}
 	case "ocd":
 		result := launcher.DetectOpenCodeDesktop()
 		if !result.Installed {
-			fmt.Fprintln(os.Stderr, "OpenCode Desktop installation not detected.")
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Please visit https://opencode.ai/download to get started with installation.")
-			fmt.Fprintln(os.Stderr, "")
-			os.Exit(1)
+			if shellMode {
+				fmt.Fprintln(os.Stderr, "Warning: OpenCode Desktop installation not detected. Shell mode will continue.")
+			} else {
+				fmt.Fprintln(os.Stderr, "OpenCode Desktop installation not detected.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "Please visit https://opencode.ai/download to get started with installation.")
+				fmt.Fprintln(os.Stderr, "")
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -453,7 +481,9 @@ func runGantry(cmd *cobra.Command, args []string) {
 
 		// Tool info
 		fmt.Println("║  TOOL                                                                                  ║")
-		if toolSource == "flag" {
+		if shellMode {
+			fmt.Println(boxLine("║    Launching:       ", "Shell Mode (configured for "+toolDisplayName+")"))
+		} else if toolSource == "flag" {
 			fmt.Println(boxLine("║    Launching:       ", toolDisplayName+" (from --tool flag)"))
 		} else if toolSource == "config" {
 			fmt.Println(boxLine("║    Launching:       ", toolDisplayName+" (from config)"))
@@ -602,6 +632,30 @@ func runGantry(cmd *cobra.Command, args []string) {
 	// Build environment based on mode (for Claude Code)
 	env := launcher.BuildEnvironment(globalConfig, resourceAttributes, mode)
 
+	if shellMode {
+		fmt.Println()
+		fmt.Printf("Starting shell with GANTRY configuration for %s...\n", toolDisplayName)
+		fmt.Println()
+
+		// Determine the tool command for the welcome message
+		var toolCommand string
+		switch tool {
+		case "cc":
+			toolCommand = launcher.GetClaudeCommand()
+		case "oc":
+			toolCommand = "opencode"
+		case "ocd":
+			command, _ := launcher.GetOpenCodeDesktopLaunchCommand()
+			toolCommand = command
+		}
+
+		if err := launcher.LaunchShell(env, toolDisplayName, toolCommand); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting shell: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	fmt.Println()
 	fmt.Printf("Starting %s with GANTRY configuration...\n", toolDisplayName)
 	fmt.Println()
@@ -682,6 +736,7 @@ environment, telemetry, and provider settings.
 
 Usage:
   gantry [options] [tool-args...]           Run AI tool with GANTRY configuration
+  gantry --shell [options]                  Start a configured shell session
   gantry init [--force]                     Create the global configuration file
   gantry config                             Interactive configuration editor
   gantry config show                        Display current configuration
@@ -705,6 +760,9 @@ Options:
   --mode, -m <mode>               Set the provider mode (bedrock or litellm)
                                   Overrides gantry.mode in config file
 
+  --shell, -s                     Launch a configured shell instead of the AI tool
+                                  All normal setup is performed; you run commands manually
+
 Tools:
   cc                              Claude Code - Anthropic's CLI for Claude
   oc                              OpenCode Terminal - Terminal-based AI coding agent
@@ -718,6 +776,7 @@ Modes:
 
 Environment Variables:
   GANTRY_USERNAME                 Optional. Overrides gantry.username from config.
+  GANTRY_SHELL                    Set to "1" inside a gantry shell session.
 
 Configuration Files:
   ~/.gantryrc.json                Global configuration (created by 'gantry init')
@@ -731,6 +790,8 @@ Examples:
   gantry -t oc --mode litellm     Start OpenCode Terminal with LiteLLM
   gantry --mode bedrock           Start with AWS Bedrock provider
   gantry --mode litellm           Start with LiteLLM proxy provider
+  gantry --shell                  Start a configured shell (manual tool execution)
+  gantry -s -t cc --mode bedrock  Shell with Bedrock Claude Code config
   gantry init                     Initialize global configuration
   gantry init --force             Reinitialize global configuration
   gantry config                   Edit configuration interactively

@@ -6,6 +6,7 @@ GANTRY (Gateway for AI Navigation, Telemetry, and Runtime Yield) is a Go CLI app
 
 - **Multiple Tools** - Launch Claude Code, OpenCode Terminal, or OpenCode Desktop via `defaultTool` setting or `--tool` flag
 - **Multiple Providers** - Supports AWS Bedrock or LiteLLM proxy via `mode` setting
+- **Shell Mode** - Configure environment without launching the tool (`--shell` / `-s`), spawning a shell with all env vars set and a `(gantry)` prompt prefix
 - **OpenTelemetry Telemetry** - Adds custom resource attributes for AI cost tracking (username, project, team, cost center, git branch) - Claude Code only
 - **claude-powerline** - Configures the status bar theme and style - Claude Code only
 
@@ -28,7 +29,8 @@ gantry/
 │   │   └── config.go           # Load/save/validate config, find project config
 │   ├── launcher/               # Tool launcher
 │   │   ├── launcher.go         # Environment building, resource attributes, launch process
-│   │   └── detection.go        # Tool installation detection (Claude Code, OpenCode)
+│   │   ├── detection.go        # Tool installation detection (Claude Code, OpenCode)
+│   │   └── shell.go            # Shell mode: spawn user's shell with configured environment
 │   ├── opencode/               # OpenCode integration
 │   │   └── opencode.go         # OpenCode config file management (~/.config/opencode/opencode.json)
 │   ├── powerline/              # claude-powerline integration
@@ -90,10 +92,13 @@ make clean          # Remove build artifacts
 
 - `--tool, -t <tool>` - Override defaultTool. Values: `cc`, `oc`, `ocd`
 - `--mode, -m <mode>` - Override mode. Values: `bedrock`, `litellm`
+- `--shell, -s` - Launch a configured shell instead of the AI tool. All normal setup is performed; the user runs commands manually
 
 ## Environment Variables
 
 GANTRY reads username from `gantry.username` in config. The `GANTRY_USERNAME` environment variable can optionally override this for CI/CD scenarios.
+
+When shell mode is active (`--shell` / `-s`), `GANTRY_SHELL=1` is set in the spawned shell so users and scripts can detect they are inside a gantry shell session.
 
 GANTRY sets the following environment variables for Claude Code:
 
