@@ -244,6 +244,23 @@ func detectClaudeDesktopWindows() ToolDetectionResult {
 		}
 	}
 
+	// Check for MSIX/AppX package installation (Microsoft Store style)
+	// Path pattern: C:\Program Files\WindowsApps\Claude_<version>_x64__<hash>\app
+	if programFiles != "" {
+		windowsAppsDir := filepath.Join(programFiles, "WindowsApps")
+		matches, err := filepath.Glob(filepath.Join(windowsAppsDir, "Claude_*", "app"))
+		if err == nil {
+			for _, match := range matches {
+				if info, err := os.Stat(match); err == nil && info.IsDir() {
+					return ToolDetectionResult{
+						Installed: true,
+						Path:      match,
+					}
+				}
+			}
+		}
+	}
+
 	return ToolDetectionResult{
 		Installed: false,
 	}
