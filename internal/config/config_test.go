@@ -472,7 +472,7 @@ func TestIsValidTool(t *testing.T) {
 
 func TestValidToolValues(t *testing.T) {
 	// Ensure the ValidToolValues slice has the expected values
-	expected := []string{"cc", "oc", "ocd"}
+	expected := []string{"cc", "oc", "ocd", "cd"}
 
 	if len(ValidToolValues) != len(expected) {
 		t.Errorf("ValidToolValues has %d elements, expected %d", len(ValidToolValues), len(expected))

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mattabdou/gantry/internal/claudedesktop"
 	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/launcher"
 	"github.com/mattabdou/gantry/internal/opencode"
@@ -221,6 +222,16 @@ func runGantry(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Claude Desktop requires LiteLLM mode - check early before mode-specific config validation
+	if toolFlag == "cd" && mode != "litellm" {
+		fmt.Fprintln(os.Stderr, "Error: Claude Desktop configuration requires LiteLLM mode.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Claude Desktop has native Bedrock support in its own UI.")
+		fmt.Fprintln(os.Stderr, "Use --mode litellm or set gantry.mode to \"litellm\" in ~/.gantryrc.json.")
+		fmt.Fprintln(os.Stderr, "")
+		os.Exit(1)
+	}
+
 	// Validate mode-specific configuration exists
 	if mode == "bedrock" {
 		if globalConfig.Bedrock == nil {
@@ -277,7 +288,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if !config.IsValidTool(tool) {
 		fmt.Fprintf(os.Stderr, "Error: invalid tool %q.\n", tool)
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop).")
+		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cd (Claude Desktop).")
 		fmt.Fprintln(os.Stderr, "")
 		os.Exit(1)
 	}
@@ -323,6 +334,15 @@ func runGantry(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 		}
+	case "cd":
+		result := launcher.DetectClaudeDesktop()
+		if !result.Installed {
+			fmt.Fprintln(os.Stderr, "Error: Claude Desktop installation not detected.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Please install Claude Desktop from https://claude.ai/download")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
+		}
 	}
 
 	// Handle --resetconfig flag
@@ -366,6 +386,24 @@ func runGantry(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 			fmt.Println(result.Message)
+		}
+		return
+	}
+
+	// Handle Claude Desktop configuration (configure-and-exit, does not launch)
+	if tool == "cd" {
+		configResult, err := claudedesktop.ConfigureGateway(globalConfig.LiteLLM)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error configuring Claude Desktop: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println(configResult.Message)
+		fmt.Println()
+		if runtime.GOOS == "windows" {
+			fmt.Println("Claude Desktop has been configured. Please launch Claude Desktop from your Start Menu.")
+		} else {
+			fmt.Println("Claude Desktop has been configured. Please launch Claude Desktop from your Applications folder.")
 		}
 		return
 	}
@@ -522,6 +560,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 		toolDisplayName = "OpenCode Terminal"
 	case "ocd":
 		toolDisplayName = "OpenCode Desktop"
+	case "cd":
+		toolDisplayName = "Claude Desktop"
 	}
 
 	if !bypassLoadingScreen {
@@ -814,10 +854,10 @@ Usage:
   gantry --version                          Show version number
 
 Options:
-  --tool, -t <tool>               Set the AI tool to launch
+  --tool, -t <tool>               Set the AI tool to launch (or configure)
                                   Overrides gantry.defaultTool in config file
                                   Values: cc (Claude Code), oc (OpenCode Terminal),
-                                          ocd (OpenCode Desktop)
+                                          ocd (OpenCode Desktop), cd (Claude Desktop)
 
   --mode, -m <mode>               Set the provider mode (bedrock or litellm)
                                   Overrides gantry.mode in config file
@@ -832,6 +872,7 @@ Tools:
   cc                              Claude Code - Anthropic's CLI for Claude
   oc                              OpenCode Terminal - Terminal-based AI coding agent
   ocd                             OpenCode Desktop - Desktop AI coding application
+  cd                              Claude Desktop - Configure for LiteLLM gateway
 
 Modes:
   bedrock                         Use AWS Bedrock as the AI provider
@@ -852,6 +893,7 @@ Examples:
   gantry --tool cc                Start Claude Code
   gantry --tool oc                Start OpenCode Terminal
   gantry --tool ocd               Start OpenCode Desktop
+  gantry --tool cd                Configure Claude Desktop for LiteLLM gateway
   gantry -t oc --mode litellm     Start OpenCode Terminal with LiteLLM
   gantry --mode bedrock           Start with AWS Bedrock provider
   gantry --mode litellm           Start with LiteLLM proxy provider

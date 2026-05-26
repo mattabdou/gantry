@@ -95,7 +95,7 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 }
 
 // ValidToolValues contains the valid values for the defaultTool config
-var ValidToolValues = []string{"cc", "oc", "ocd"}
+var ValidToolValues = []string{"cc", "oc", "ocd", "cd"}
 
 // IsValidTool checks if a tool value is valid
 func IsValidTool(tool string) bool {
@@ -201,7 +201,7 @@ func ValidateGlobalConfig(config *GlobalConfig) error {
 
 	// Validate defaultTool if specified
 	if config.Gantry.DefaultTool != "" && !IsValidTool(config.Gantry.DefaultTool) {
-		return fmt.Errorf("global config \"gantry.defaultTool\" has invalid value %q - must be one of: cc, oc, ocd", config.Gantry.DefaultTool)
+		return fmt.Errorf("global config \"gantry.defaultTool\" has invalid value %q - must be one of: cc, oc, ocd, cd", config.Gantry.DefaultTool)
 	}
 
 	// Validate claudeCodeTerminal section

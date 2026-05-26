@@ -179,6 +179,76 @@ func detectOpenCodeDesktopLinux() ToolDetectionResult {
 	}
 }
 
+// DetectClaudeDesktop checks if Claude Desktop is installed
+func DetectClaudeDesktop() ToolDetectionResult {
+	switch runtime.GOOS {
+	case "darwin":
+		return detectClaudeDesktopMacOS()
+	case "windows":
+		return detectClaudeDesktopWindows()
+	default:
+		return ToolDetectionResult{
+			Installed: false,
+		}
+	}
+}
+
+// detectClaudeDesktopMacOS checks for Claude Desktop on macOS
+func detectClaudeDesktopMacOS() ToolDetectionResult {
+	paths := []string{
+		"/Applications/Claude.app",
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		paths = append(paths, filepath.Join(home, "Applications", "Claude.app"))
+	}
+
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			return ToolDetectionResult{
+				Installed: true,
+				Path:      path,
+			}
+		}
+	}
+
+	return ToolDetectionResult{
+		Installed: false,
+	}
+}
+
+// detectClaudeDesktopWindows checks for Claude Desktop on Windows
+func detectClaudeDesktopWindows() ToolDetectionResult {
+	var paths []string
+
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData != "" {
+		paths = append(paths,
+			filepath.Join(localAppData, "AnthropicClaude", "Claude.exe"),
+			filepath.Join(localAppData, "Programs", "Claude", "Claude.exe"),
+		)
+	}
+
+	programFiles := os.Getenv("PROGRAMFILES")
+	if programFiles != "" {
+		paths = append(paths, filepath.Join(programFiles, "Claude", "Claude.exe"))
+	}
+
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			return ToolDetectionResult{
+				Installed: true,
+				Path:      path,
+			}
+		}
+	}
+
+	return ToolDetectionResult{
+		Installed: false,
+	}
+}
+
 // GetOpenCodeDesktopLaunchCommand returns the command to launch OpenCode Desktop
 func GetOpenCodeDesktopLaunchCommand() (string, []string) {
 	switch runtime.GOOS {
