@@ -31,14 +31,31 @@ func GetConfigPath() (string, error) {
 		}
 		return filepath.Join(home, "Library", "Application Support", "Claude", ConfigFileName), nil
 	case "windows":
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			return "", fmt.Errorf("APPDATA environment variable not set")
-		}
-		return filepath.Join(appData, "Claude", ConfigFileName), nil
+		return getWindowsConfigPath()
 	default:
 		return "", fmt.Errorf("Claude Desktop is not supported on %s", runtime.GOOS)
 	}
+}
+
+// getWindowsConfigPath returns the config path, checking for MSIX installations first
+func getWindowsConfigPath() (string, error) {
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData != "" {
+		// Check for MSIX package installation - uses virtualized filesystem
+		packagesDir := filepath.Join(localAppData, "Packages")
+		matches, _ := filepath.Glob(filepath.Join(packagesDir, "Claude_*"))
+		if len(matches) > 0 {
+			// MSIX apps read from LocalCache\Roaming instead of real %APPDATA%
+			return filepath.Join(matches[0], "LocalCache", "Roaming", "Claude", ConfigFileName), nil
+		}
+	}
+
+	// Fall back to standard %APPDATA% path for traditional installations
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		return "", fmt.Errorf("APPDATA environment variable not set")
+	}
+	return filepath.Join(appData, "Claude", ConfigFileName), nil
 }
 
 // LoadConfig loads the Claude Desktop configuration as a generic map to preserve unknown fields
