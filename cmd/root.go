@@ -657,7 +657,11 @@ func runGantry(cmd *cobra.Command, args []string) {
 				fmt.Println(boxLine("║    Mode:            ", "litellm (from config)"))
 			}
 			fmt.Println(boxLine("║    Base URL:        ", globalConfig.LiteLLM.BaseURL))
-			fmt.Println(boxLine("║    Model:           ", globalConfig.LiteLLM.Model))
+			displayModel := globalConfig.LiteLLM.Model
+			if tool == "co" && globalConfig.Codex != nil && globalConfig.Codex.Model != "" {
+				displayModel = globalConfig.Codex.Model
+			}
+			fmt.Println(boxLine("║    Model:           ", displayModel))
 		}
 		fmt.Println("║                                                                                        ║")
 
