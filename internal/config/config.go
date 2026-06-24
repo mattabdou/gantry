@@ -101,7 +101,7 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 }
 
 // ValidToolValues contains the valid values for the defaultTool config
-var ValidToolValues = []string{"cc", "oc", "ocd", "cl", "clk", "co"}
+var ValidToolValues = []string{"cc", "oc", "ocd", "cl", "clk", "clp", "co"}
 
 // IsValidTool checks if a tool value is valid
 func IsValidTool(tool string) bool {

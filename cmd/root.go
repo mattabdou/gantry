@@ -223,8 +223,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Cline and Codex require LiteLLM mode
-	if (toolFlag == "cl" || toolFlag == "clk" || toolFlag == "co") && mode != "litellm" {
+	// Cline, Cline Plugin, and Codex require LiteLLM mode
+	if (toolFlag == "cl" || toolFlag == "clk" || toolFlag == "clp" || toolFlag == "co") && mode != "litellm" {
 		toolName := "Cline"
 		if toolFlag == "co" {
 			toolName = "Codex"
@@ -292,7 +292,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if !config.IsValidTool(tool) {
 		fmt.Fprintf(os.Stderr, "Error: invalid tool %q.\n", tool)
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cl (Cline), clk (Cline Kanban), co (Codex).")
+		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cl (Cline), clk (Cline Kanban), clp (Cline Plugin), co (Codex).")
 		fmt.Fprintln(os.Stderr, "")
 		os.Exit(1)
 	}
@@ -350,6 +350,15 @@ func runGantry(cmd *cobra.Command, args []string) {
 				fmt.Fprintln(os.Stderr, "")
 				os.Exit(1)
 			}
+		}
+	case "clp":
+		result := launcher.DetectClinePlugin()
+		if !result.Installed {
+			fmt.Fprintln(os.Stderr, "Error: Cline VS Code extension not detected.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "Please install the Cline extension in VS Code (Extension ID: saoudrizwan.claude-dev).")
+			fmt.Fprintln(os.Stderr, "")
+			os.Exit(1)
 		}
 	case "co":
 		result := launcher.DetectCodex()
@@ -567,6 +576,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 		toolDisplayName = "Cline"
 	case "clk":
 		toolDisplayName = "Cline Kanban"
+	case "clp":
+		toolDisplayName = "Cline Plugin (VS Code)"
 	case "co":
 		toolDisplayName = "Codex"
 	}
@@ -732,6 +743,20 @@ func runGantry(cmd *cobra.Command, args []string) {
 		if configResult != nil && configResult.Updated {
 			fmt.Printf("OpenCode: %s\n", configResult.Message)
 		}
+	}
+
+	// Handle Cline Plugin configuration (configure-and-exit)
+	if tool == "clp" {
+		configResult, err := cline.ConfigurePlugin(globalConfig.LiteLLM)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error configuring Cline VS Code plugin: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println(configResult.Message)
+		fmt.Println()
+		fmt.Println("Open VS Code and the Cline extension will use the configured LiteLLM gateway.")
+		return
 	}
 
 	// Configure Cline if using Cline tools
@@ -914,7 +939,8 @@ Options:
                                   Overrides gantry.defaultTool in config file
                                   Values: cc (Claude Code), oc (OpenCode Terminal),
                                           ocd (OpenCode Desktop), cl (Cline),
-                                          clk (Cline Kanban), co (Codex)
+                                          clk (Cline Kanban), clp (Cline Plugin),
+                                          co (Codex)
 
   --mode, -m <mode>               Set the provider mode (bedrock or litellm)
                                   Overrides gantry.mode in config file
@@ -931,6 +957,7 @@ Tools:
   ocd                             OpenCode Desktop - Desktop AI coding application
   cl                              Cline - AI coding agent CLI (requires LiteLLM mode)
   clk                             Cline Kanban - Local web board for parallel agents
+  clp                             Cline Plugin - Configure VS Code extension for LiteLLM
   co                              Codex - OpenAI's CLI coding agent (requires LiteLLM mode)
 
 Modes:
@@ -954,6 +981,7 @@ Examples:
   gantry --tool ocd               Start OpenCode Desktop
   gantry --tool cl                Start Cline CLI with LiteLLM gateway
   gantry --tool clk               Start Cline Kanban board
+  gantry --tool clp               Configure Cline VS Code plugin for LiteLLM
   gantry --tool co                Start Codex CLI with LiteLLM gateway
   gantry -t oc --mode litellm     Start OpenCode Terminal with LiteLLM
   gantry --mode bedrock           Start with AWS Bedrock provider

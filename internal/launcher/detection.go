@@ -179,6 +179,29 @@ func detectOpenCodeDesktopLinux() ToolDetectionResult {
 	}
 }
 
+// DetectClinePlugin checks if the Cline VS Code extension is installed
+func DetectClinePlugin() ToolDetectionResult {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ToolDetectionResult{Installed: false, Error: err}
+	}
+
+	var extensionsDir string
+	switch runtime.GOOS {
+	case "windows":
+		extensionsDir = filepath.Join(home, ".vscode", "extensions")
+	default:
+		extensionsDir = filepath.Join(home, ".vscode", "extensions")
+	}
+
+	matches, err := filepath.Glob(filepath.Join(extensionsDir, "saoudrizwan.claude-dev-*"))
+	if err == nil && len(matches) > 0 {
+		return ToolDetectionResult{Installed: true, Path: matches[0]}
+	}
+
+	return ToolDetectionResult{Installed: false}
+}
+
 // DetectCodex checks if OpenAI Codex CLI is installed
 func DetectCodex() ToolDetectionResult {
 	path, err := exec.LookPath("codex")
