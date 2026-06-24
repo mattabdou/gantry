@@ -820,7 +820,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	case "ocd":
 		// Launch OpenCode Desktop
-		if err := launcher.LaunchOpenCodeDesktop(); err != nil {
+		if err := launcher.LaunchOpenCodeDesktop(env); err != nil {
 			fmt.Fprintf(os.Stderr, "Error starting OpenCode Desktop: %v\n", err)
 			os.Exit(1)
 		}

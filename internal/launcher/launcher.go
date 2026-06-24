@@ -275,10 +275,11 @@ func LaunchOpenCodeTerminal(args []string, env []string) error {
 }
 
 // LaunchOpenCodeDesktop launches the OpenCode Desktop application
-func LaunchOpenCodeDesktop() error {
+func LaunchOpenCodeDesktop(env []string) error {
 	command, args := GetOpenCodeDesktopLaunchCommand()
 
 	cmd := exec.Command(command, args...)
+	cmd.Env = env
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
