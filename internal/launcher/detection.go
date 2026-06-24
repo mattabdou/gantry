@@ -179,6 +179,21 @@ func detectOpenCodeDesktopLinux() ToolDetectionResult {
 	}
 }
 
+// DetectCodex checks if OpenAI Codex CLI is installed
+func DetectCodex() ToolDetectionResult {
+	path, err := exec.LookPath("codex")
+	if err != nil {
+		return ToolDetectionResult{
+			Installed: false,
+			Error:     err,
+		}
+	}
+	return ToolDetectionResult{
+		Installed: true,
+		Path:      path,
+	}
+}
+
 // DetectCline checks if Cline CLI is installed
 func DetectCline() ToolDetectionResult {
 	path, err := exec.LookPath("cline")

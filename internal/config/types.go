@@ -8,6 +8,7 @@ type GlobalConfig struct {
 	LiteLLM            *LiteLLMConfig            `json:"litellm,omitempty"`
 	Powerline          *PowerlineConfig          `json:"powerline,omitempty"`
 	ClaudeCodeTerminal *ClaudeCodeTerminalConfig `json:"claudeCodeTerminal,omitempty"`
+	Codex              *CodexConfig              `json:"codex,omitempty"`
 }
 
 // GantryConfig contains GANTRY-specific configuration
@@ -67,6 +68,11 @@ type PowerlineConfig struct {
 // ClaudeCodeTerminalConfig contains Claude Code terminal-specific settings
 type ClaudeCodeTerminalConfig struct {
 	DisableExperimentalBetas *int `json:"disableExperimentalBetas,omitempty"` // 1 to disable (default), 0 to enable
+}
+
+// CodexConfig contains OpenAI Codex CLI configuration
+type CodexConfig struct {
+	Model string `json:"model,omitempty"`
 }
 
 // ProjectConfig represents the .gantry.json project configuration file

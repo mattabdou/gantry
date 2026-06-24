@@ -87,6 +87,12 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 		_ = SaveGlobalConfig(&config)
 	}
 
+	// Auto-migrate: add codex section with default model if missing
+	if config.Codex == nil {
+		config.Codex = &CodexConfig{Model: "gpt-5.5"}
+		_ = SaveGlobalConfig(&config)
+	}
+
 	if err := ValidateGlobalConfig(&config); err != nil {
 		return nil, err
 	}
@@ -95,7 +101,7 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 }
 
 // ValidToolValues contains the valid values for the defaultTool config
-var ValidToolValues = []string{"cc", "oc", "ocd", "cl", "clk"}
+var ValidToolValues = []string{"cc", "oc", "ocd", "cl", "clk", "co"}
 
 // IsValidTool checks if a tool value is valid
 func IsValidTool(tool string) bool {

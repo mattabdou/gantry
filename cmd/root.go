@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mattabdou/gantry/internal/cline"
+	"github.com/mattabdou/gantry/internal/codex"
 	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/launcher"
 	"github.com/mattabdou/gantry/internal/opencode"
@@ -222,9 +223,13 @@ func runGantry(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Cline requires LiteLLM mode
-	if (toolFlag == "cl" || toolFlag == "clk") && mode != "litellm" {
-		fmt.Fprintln(os.Stderr, "Error: Cline requires LiteLLM mode.")
+	// Cline and Codex require LiteLLM mode
+	if (toolFlag == "cl" || toolFlag == "clk" || toolFlag == "co") && mode != "litellm" {
+		toolName := "Cline"
+		if toolFlag == "co" {
+			toolName = "Codex"
+		}
+		fmt.Fprintf(os.Stderr, "Error: %s requires LiteLLM mode.\n", toolName)
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Use --mode litellm or set gantry.mode to \"litellm\" in ~/.gantryrc.json.")
 		fmt.Fprintln(os.Stderr, "")
@@ -287,7 +292,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if !config.IsValidTool(tool) {
 		fmt.Fprintf(os.Stderr, "Error: invalid tool %q.\n", tool)
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cl (Cline), clk (Cline Kanban).")
+		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cl (Cline), clk (Cline Kanban), co (Codex).")
 		fmt.Fprintln(os.Stderr, "")
 		os.Exit(1)
 	}
@@ -342,6 +347,19 @@ func runGantry(cmd *cobra.Command, args []string) {
 				fmt.Fprintln(os.Stderr, "Error: Cline installation not detected.")
 				fmt.Fprintln(os.Stderr, "")
 				fmt.Fprintln(os.Stderr, "Please install Cline: npm install -g cline")
+				fmt.Fprintln(os.Stderr, "")
+				os.Exit(1)
+			}
+		}
+	case "co":
+		result := launcher.DetectCodex()
+		if !result.Installed {
+			if shellMode {
+				fmt.Fprintln(os.Stderr, "Warning: Codex installation not detected. Shell mode will continue.")
+			} else {
+				fmt.Fprintln(os.Stderr, "Error: Codex installation not detected.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "Please install Codex: npm install -g @openai/codex")
 				fmt.Fprintln(os.Stderr, "")
 				os.Exit(1)
 			}
@@ -549,6 +567,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 		toolDisplayName = "Cline"
 	case "clk":
 		toolDisplayName = "Cline Kanban"
+	case "co":
+		toolDisplayName = "Codex"
 	}
 
 	if !bypassLoadingScreen {
@@ -722,11 +742,28 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Configure Codex if using Codex tool
+	if tool == "co" {
+		configResult, err := codex.ConfigureProvider(globalConfig.Codex.Model, globalConfig.LiteLLM, globalConfig.OTEL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error configuring Codex: %v\n", err)
+			os.Exit(1)
+		}
+		if configResult != nil && configResult.Updated {
+			fmt.Printf("Codex: %s\n", configResult.Message)
+		}
+	}
+
 	// Build resource attributes (for Claude Code telemetry)
 	resourceAttributes := launcher.BuildResourceAttributes(username, workingPath, projectConfig, gitBranch, Version)
 
 	// Build environment based on mode (for Claude Code)
 	env := launcher.BuildEnvironment(globalConfig, resourceAttributes, mode)
+
+	// Add Codex-specific API key env var
+	if tool == "co" {
+		env = append(env, "GANTRY_LITELLM_API_KEY="+globalConfig.LiteLLM.AuthToken)
+	}
 
 	if shellMode {
 		fmt.Println()
@@ -747,6 +784,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 			toolCommand = "cline"
 		case "clk":
 			toolCommand = "cline kanban"
+		case "co":
+			toolCommand = "codex"
 		}
 
 		if err := launcher.LaunchShell(env, toolDisplayName, toolCommand); err != nil {
@@ -796,6 +835,12 @@ func runGantry(cmd *cobra.Command, args []string) {
 		// Launch Cline Kanban
 		if err := launcher.LaunchClineKanban(env); err != nil {
 			fmt.Fprintf(os.Stderr, "Error starting Cline Kanban: %v\n", err)
+			os.Exit(1)
+		}
+	case "co":
+		// Launch Codex CLI
+		if err := launcher.LaunchCodex(filteredArgs, env); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting Codex: %v\n", err)
 			os.Exit(1)
 		}
 	}
@@ -869,7 +914,7 @@ Options:
                                   Overrides gantry.defaultTool in config file
                                   Values: cc (Claude Code), oc (OpenCode Terminal),
                                           ocd (OpenCode Desktop), cl (Cline),
-                                          clk (Cline Kanban)
+                                          clk (Cline Kanban), co (Codex)
 
   --mode, -m <mode>               Set the provider mode (bedrock or litellm)
                                   Overrides gantry.mode in config file
@@ -886,6 +931,7 @@ Tools:
   ocd                             OpenCode Desktop - Desktop AI coding application
   cl                              Cline - AI coding agent CLI (requires LiteLLM mode)
   clk                             Cline Kanban - Local web board for parallel agents
+  co                              Codex - OpenAI's CLI coding agent (requires LiteLLM mode)
 
 Modes:
   bedrock                         Use AWS Bedrock as the AI provider
@@ -908,6 +954,7 @@ Examples:
   gantry --tool ocd               Start OpenCode Desktop
   gantry --tool cl                Start Cline CLI with LiteLLM gateway
   gantry --tool clk               Start Cline Kanban board
+  gantry --tool co                Start Codex CLI with LiteLLM gateway
   gantry -t oc --mode litellm     Start OpenCode Terminal with LiteLLM
   gantry --mode bedrock           Start with AWS Bedrock provider
   gantry --mode litellm           Start with LiteLLM proxy provider

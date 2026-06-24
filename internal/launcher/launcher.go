@@ -292,6 +292,25 @@ func LaunchOpenCodeDesktop() error {
 	return nil
 }
 
+// LaunchCodex spawns OpenAI Codex CLI with the configured environment
+func LaunchCodex(args []string, env []string) error {
+	cmd := exec.Command("codex", args...)
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return err
+	}
+
+	return nil
+}
+
 // LaunchCline spawns Cline CLI with the configured environment
 func LaunchCline(args []string, env []string) error {
 	cmd := exec.Command("cline", args...)
