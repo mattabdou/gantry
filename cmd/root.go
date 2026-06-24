@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mattabdou/gantry/internal/claudedesktop"
+	"github.com/mattabdou/gantry/internal/cline"
 	"github.com/mattabdou/gantry/internal/config"
 	"github.com/mattabdou/gantry/internal/launcher"
 	"github.com/mattabdou/gantry/internal/opencode"
@@ -222,11 +222,10 @@ func runGantry(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Claude Desktop requires LiteLLM mode - check early before mode-specific config validation
-	if toolFlag == "cd" && mode != "litellm" {
-		fmt.Fprintln(os.Stderr, "Error: Claude Desktop configuration requires LiteLLM mode.")
+	// Cline requires LiteLLM mode
+	if (toolFlag == "cl" || toolFlag == "clk") && mode != "litellm" {
+		fmt.Fprintln(os.Stderr, "Error: Cline requires LiteLLM mode.")
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Claude Desktop has native Bedrock support in its own UI.")
 		fmt.Fprintln(os.Stderr, "Use --mode litellm or set gantry.mode to \"litellm\" in ~/.gantryrc.json.")
 		fmt.Fprintln(os.Stderr, "")
 		os.Exit(1)
@@ -288,7 +287,7 @@ func runGantry(cmd *cobra.Command, args []string) {
 	if !config.IsValidTool(tool) {
 		fmt.Fprintf(os.Stderr, "Error: invalid tool %q.\n", tool)
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cd (Claude Desktop).")
+		fmt.Fprintln(os.Stderr, "Tool must be one of: cc (Claude Code), oc (OpenCode Terminal), ocd (OpenCode Desktop), cl (Cline), clk (Cline Kanban).")
 		fmt.Fprintln(os.Stderr, "")
 		os.Exit(1)
 	}
@@ -334,14 +333,18 @@ func runGantry(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 		}
-	case "cd":
-		result := launcher.DetectClaudeDesktop()
+	case "cl", "clk":
+		result := launcher.DetectCline()
 		if !result.Installed {
-			fmt.Fprintln(os.Stderr, "Error: Claude Desktop installation not detected.")
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Please install Claude Desktop from https://claude.ai/download")
-			fmt.Fprintln(os.Stderr, "")
-			os.Exit(1)
+			if shellMode {
+				fmt.Fprintln(os.Stderr, "Warning: Cline installation not detected. Shell mode will continue.")
+			} else {
+				fmt.Fprintln(os.Stderr, "Error: Cline installation not detected.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "Please install Cline: npm install -g cline")
+				fmt.Fprintln(os.Stderr, "")
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -386,24 +389,6 @@ func runGantry(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 			fmt.Println(result.Message)
-		}
-		return
-	}
-
-	// Handle Claude Desktop configuration (configure-and-exit, does not launch)
-	if tool == "cd" {
-		configResult, err := claudedesktop.ConfigureGateway(globalConfig.LiteLLM)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error configuring Claude Desktop: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println(configResult.Message)
-		fmt.Println()
-		if runtime.GOOS == "windows" {
-			fmt.Println("Claude Desktop has been configured. Please launch Claude Desktop from your Start Menu.")
-		} else {
-			fmt.Println("Claude Desktop has been configured. Please launch Claude Desktop from your Applications folder.")
 		}
 		return
 	}
@@ -560,8 +545,10 @@ func runGantry(cmd *cobra.Command, args []string) {
 		toolDisplayName = "OpenCode Terminal"
 	case "ocd":
 		toolDisplayName = "OpenCode Desktop"
-	case "cd":
-		toolDisplayName = "Claude Desktop"
+	case "cl":
+		toolDisplayName = "Cline"
+	case "clk":
+		toolDisplayName = "Cline Kanban"
 	}
 
 	if !bypassLoadingScreen {
@@ -727,6 +714,14 @@ func runGantry(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Configure Cline if using Cline tools
+	if tool == "cl" || tool == "clk" {
+		if err := cline.ConfigureProvider(globalConfig.LiteLLM); err != nil {
+			fmt.Fprintf(os.Stderr, "Error configuring Cline: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	// Build resource attributes (for Claude Code telemetry)
 	resourceAttributes := launcher.BuildResourceAttributes(username, workingPath, projectConfig, gitBranch, Version)
 
@@ -748,6 +743,10 @@ func runGantry(cmd *cobra.Command, args []string) {
 		case "ocd":
 			command, _ := launcher.GetOpenCodeDesktopLaunchCommand()
 			toolCommand = command
+		case "cl":
+			toolCommand = "cline"
+		case "clk":
+			toolCommand = "cline kanban"
 		}
 
 		if err := launcher.LaunchShell(env, toolDisplayName, toolCommand); err != nil {
@@ -787,6 +786,18 @@ func runGantry(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		fmt.Println("OpenCode Desktop launched.")
+	case "cl":
+		// Launch Cline CLI
+		if err := launcher.LaunchCline(filteredArgs, env); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting Cline: %v\n", err)
+			os.Exit(1)
+		}
+	case "clk":
+		// Launch Cline Kanban
+		if err := launcher.LaunchClineKanban(env); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting Cline Kanban: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -857,7 +868,8 @@ Options:
   --tool, -t <tool>               Set the AI tool to launch (or configure)
                                   Overrides gantry.defaultTool in config file
                                   Values: cc (Claude Code), oc (OpenCode Terminal),
-                                          ocd (OpenCode Desktop), cd (Claude Desktop)
+                                          ocd (OpenCode Desktop), cl (Cline),
+                                          clk (Cline Kanban)
 
   --mode, -m <mode>               Set the provider mode (bedrock or litellm)
                                   Overrides gantry.mode in config file
@@ -872,7 +884,8 @@ Tools:
   cc                              Claude Code - Anthropic's CLI for Claude
   oc                              OpenCode Terminal - Terminal-based AI coding agent
   ocd                             OpenCode Desktop - Desktop AI coding application
-  cd                              Claude Desktop - Configure for LiteLLM gateway
+  cl                              Cline - AI coding agent CLI (requires LiteLLM mode)
+  clk                             Cline Kanban - Local web board for parallel agents
 
 Modes:
   bedrock                         Use AWS Bedrock as the AI provider
@@ -893,7 +906,8 @@ Examples:
   gantry --tool cc                Start Claude Code
   gantry --tool oc                Start OpenCode Terminal
   gantry --tool ocd               Start OpenCode Desktop
-  gantry --tool cd                Configure Claude Desktop for LiteLLM gateway
+  gantry --tool cl                Start Cline CLI with LiteLLM gateway
+  gantry --tool clk               Start Cline Kanban board
   gantry -t oc --mode litellm     Start OpenCode Terminal with LiteLLM
   gantry --mode bedrock           Start with AWS Bedrock provider
   gantry --mode litellm           Start with LiteLLM proxy provider

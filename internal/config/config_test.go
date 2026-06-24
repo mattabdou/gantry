@@ -453,6 +453,8 @@ func TestIsValidTool(t *testing.T) {
 		{"cc", true},
 		{"oc", true},
 		{"ocd", true},
+		{"cl", true},
+		{"clk", true},
 		{"CC", false},   // case sensitive
 		{"claude", false},
 		{"opencode", false},
@@ -472,7 +474,7 @@ func TestIsValidTool(t *testing.T) {
 
 func TestValidToolValues(t *testing.T) {
 	// Ensure the ValidToolValues slice has the expected values
-	expected := []string{"cc", "oc", "ocd", "cd"}
+	expected := []string{"cc", "oc", "ocd", "cl", "clk"}
 
 	if len(ValidToolValues) != len(expected) {
 		t.Errorf("ValidToolValues has %d elements, expected %d", len(ValidToolValues), len(expected))

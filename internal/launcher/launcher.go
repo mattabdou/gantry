@@ -291,3 +291,41 @@ func LaunchOpenCodeDesktop() error {
 	// Don't wait for desktop app to exit
 	return nil
 }
+
+// LaunchCline spawns Cline CLI with the configured environment
+func LaunchCline(args []string, env []string) error {
+	cmd := exec.Command("cline", args...)
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return err
+	}
+
+	return nil
+}
+
+// LaunchClineKanban spawns Cline in Kanban mode (local web board)
+func LaunchClineKanban(env []string) error {
+	cmd := exec.Command("cline", "kanban")
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return err
+	}
+
+	return nil
+}

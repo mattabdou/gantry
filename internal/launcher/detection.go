@@ -179,90 +179,18 @@ func detectOpenCodeDesktopLinux() ToolDetectionResult {
 	}
 }
 
-// DetectClaudeDesktop checks if Claude Desktop is installed
-func DetectClaudeDesktop() ToolDetectionResult {
-	switch runtime.GOOS {
-	case "darwin":
-		return detectClaudeDesktopMacOS()
-	case "windows":
-		return detectClaudeDesktopWindows()
-	default:
+// DetectCline checks if Cline CLI is installed
+func DetectCline() ToolDetectionResult {
+	path, err := exec.LookPath("cline")
+	if err != nil {
 		return ToolDetectionResult{
 			Installed: false,
+			Error:     err,
 		}
 	}
-}
-
-// detectClaudeDesktopMacOS checks for Claude Desktop on macOS
-func detectClaudeDesktopMacOS() ToolDetectionResult {
-	paths := []string{
-		"/Applications/Claude.app",
-	}
-
-	home, err := os.UserHomeDir()
-	if err == nil {
-		paths = append(paths, filepath.Join(home, "Applications", "Claude.app"))
-	}
-
-	for _, path := range paths {
-		if info, err := os.Stat(path); err == nil && info.IsDir() {
-			return ToolDetectionResult{
-				Installed: true,
-				Path:      path,
-			}
-		}
-	}
-
 	return ToolDetectionResult{
-		Installed: false,
-	}
-}
-
-// detectClaudeDesktopWindows checks for Claude Desktop on Windows
-func detectClaudeDesktopWindows() ToolDetectionResult {
-	var paths []string
-
-	localAppData := os.Getenv("LOCALAPPDATA")
-	if localAppData != "" {
-		paths = append(paths,
-			filepath.Join(localAppData, "AnthropicClaude", "Claude.exe"),
-			filepath.Join(localAppData, "Programs", "Claude", "Claude.exe"),
-		)
-	}
-
-	programFiles := os.Getenv("PROGRAMFILES")
-	if programFiles != "" {
-		paths = append(paths, filepath.Join(programFiles, "Claude", "Claude.exe"))
-	}
-
-	for _, path := range paths {
-		if _, err := os.Stat(path); err == nil {
-			return ToolDetectionResult{
-				Installed: true,
-				Path:      path,
-			}
-		}
-	}
-
-	// Check for MSIX/AppX package installation (Microsoft Store style)
-	// Per-user package data is at %LOCALAPPDATA%\Packages\Claude_*
-	if localAppData != "" {
-		packagesDir := filepath.Join(localAppData, "Packages")
-		matches, err := filepath.Glob(filepath.Join(packagesDir, "Claude_*"))
-		if err == nil {
-			for _, match := range matches {
-				if info, err := os.Stat(match); err == nil && info.IsDir() {
-					return ToolDetectionResult{
-						Installed: true,
-						Path:      match,
-					}
-				}
-			}
-		}
-	}
-
-	return ToolDetectionResult{
-		Installed: false,
+		Installed: true,
+		Path:      path,
 	}
 }
 

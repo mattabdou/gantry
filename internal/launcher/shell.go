@@ -85,17 +85,17 @@ func LaunchShell(env []string, toolDisplayName string, toolCommand string) error
 
 	switch shellKind {
 	case shellBash:
-		return launchBash(shellPath, env)
+		return launchBash(shellPath, env, toolDisplayName)
 	case shellZsh:
-		return launchZsh(shellPath, env)
+		return launchZsh(shellPath, env, toolDisplayName)
 	case shellFish:
-		return launchFish(shellPath, env)
+		return launchFish(shellPath, env, toolDisplayName)
 	case shellCmdExe:
-		return launchCmdExe(shellPath, env)
+		return launchCmdExe(shellPath, env, toolDisplayName)
 	case shellPowerShell:
-		return launchPowerShell(shellPath, env)
+		return launchPowerShell(shellPath, env, toolDisplayName)
 	default:
-		return launchUnknownShell(shellPath, env)
+		return launchUnknownShell(shellPath, env, toolDisplayName)
 	}
 }
 
@@ -117,14 +117,14 @@ func runShell(cmd *exec.Cmd, env []string) error {
 }
 
 // launchBash starts bash with a temp rcfile that sources ~/.bashrc then modifies PS1
-func launchBash(shellPath string, env []string) error {
+func launchBash(shellPath string, env []string, toolDisplayName string) error {
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "gantry-shell-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	rcContent := generateBashRcContent()
+	rcContent := generateBashRcContent(toolDisplayName)
 	rcFile := filepath.Join(tmpDir, "bashrc")
 	if err := os.WriteFile(rcFile, []byte(rcContent), 0600); err != nil {
 		return fmt.Errorf("failed to write temp bashrc: %w", err)
@@ -135,24 +135,24 @@ func launchBash(shellPath string, env []string) error {
 }
 
 // generateBashRcContent returns the content for the temporary bash rcfile
-func generateBashRcContent() string {
-	return `# Gantry shell mode
+func generateBashRcContent(toolDisplayName string) string {
+	return fmt.Sprintf(`# Gantry shell mode
 if [ -f "$HOME/.bashrc" ]; then
     source "$HOME/.bashrc"
 fi
-export PS1="(gantry) $PS1"
-`
+export PS1="(gantry - %s) $PS1"
+`, toolDisplayName)
 }
 
 // launchZsh starts zsh with a temp ZDOTDIR that sources the original .zshrc then modifies PROMPT
-func launchZsh(shellPath string, env []string) error {
+func launchZsh(shellPath string, env []string, toolDisplayName string) error {
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "gantry-shell-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	rcContent := generateZshRcContent()
+	rcContent := generateZshRcContent(toolDisplayName)
 	rcFile := filepath.Join(tmpDir, ".zshrc")
 	if err := os.WriteFile(rcFile, []byte(rcContent), 0600); err != nil {
 		return fmt.Errorf("failed to write temp zshrc: %w", err)
@@ -180,41 +180,41 @@ func launchZsh(shellPath string, env []string) error {
 }
 
 // generateZshRcContent returns the content for the temporary zsh rcfile
-func generateZshRcContent() string {
-	return `# Gantry shell mode
+func generateZshRcContent(toolDisplayName string) string {
+	return fmt.Sprintf(`# Gantry shell mode
 if [ -n "$GANTRY_ORIG_ZDOTDIR" ] && [ -f "$GANTRY_ORIG_ZDOTDIR/.zshrc" ]; then
     source "$GANTRY_ORIG_ZDOTDIR/.zshrc"
 elif [ -f "$HOME/.zshrc" ]; then
     source "$HOME/.zshrc"
 fi
-export PROMPT="(gantry) $PROMPT"
-`
+export PROMPT="(gantry - %s) $PROMPT"
+`, toolDisplayName)
 }
 
 // launchFish starts fish with an init command that wraps fish_prompt
-func launchFish(shellPath string, env []string) error {
-	initCmd := `functions -c fish_prompt _gantry_orig_prompt 2>/dev/null; function fish_prompt; echo -n "(gantry) "; _gantry_orig_prompt; end`
+func launchFish(shellPath string, env []string, toolDisplayName string) error {
+	initCmd := fmt.Sprintf(`functions -c fish_prompt _gantry_orig_prompt 2>/dev/null; function fish_prompt; echo -n "(gantry - %s) "; _gantry_orig_prompt; end`, toolDisplayName)
 	cmd := exec.Command(shellPath, "--init-command", initCmd)
 	return runShell(cmd, env)
 }
 
 // launchCmdExe starts cmd.exe with a modified PROMPT env var
-func launchCmdExe(shellPath string, env []string) error {
-	env = append(env, "PROMPT=(gantry) $P$G")
+func launchCmdExe(shellPath string, env []string, toolDisplayName string) error {
+	env = append(env, fmt.Sprintf("PROMPT=(gantry - %s) $P$G", toolDisplayName))
 	cmd := exec.Command(shellPath)
 	return runShell(cmd, env)
 }
 
 // launchPowerShell starts PowerShell/pwsh with a custom prompt function
-func launchPowerShell(shellPath string, env []string) error {
-	promptCmd := `function prompt { '(gantry) ' + $(Get-Location).Path + '> ' }`
+func launchPowerShell(shellPath string, env []string, toolDisplayName string) error {
+	promptCmd := fmt.Sprintf(`function prompt { '(gantry - %s) ' + $(Get-Location).Path + '> ' }`, toolDisplayName)
 	cmd := exec.Command(shellPath, "-NoExit", "-Command", promptCmd)
 	return runShell(cmd, env)
 }
 
 // launchUnknownShell starts an unknown shell with PS1 set (best-effort)
-func launchUnknownShell(shellPath string, env []string) error {
-	env = append(env, "PS1=(gantry) $ ")
+func launchUnknownShell(shellPath string, env []string, toolDisplayName string) error {
+	env = append(env, fmt.Sprintf("PS1=(gantry - %s) $ ", toolDisplayName))
 	cmd := exec.Command(shellPath)
 	return runShell(cmd, env)
 }

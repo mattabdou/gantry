@@ -88,18 +88,18 @@ func TestGetUserShellWindows(t *testing.T) {
 }
 
 func TestGenerateBashRcContent(t *testing.T) {
-	content := generateBashRcContent()
+	content := generateBashRcContent("Claude Code")
 
 	if !strings.Contains(content, `source "$HOME/.bashrc"`) {
 		t.Error("bash rcfile should source ~/.bashrc")
 	}
-	if !strings.Contains(content, `PS1="(gantry) $PS1"`) {
-		t.Error("bash rcfile should modify PS1 with (gantry) prefix")
+	if !strings.Contains(content, `PS1="(gantry - Claude Code) $PS1"`) {
+		t.Error("bash rcfile should modify PS1 with (gantry - Claude Code) prefix")
 	}
 }
 
 func TestGenerateZshRcContent(t *testing.T) {
-	content := generateZshRcContent()
+	content := generateZshRcContent("Claude Code")
 
 	if !strings.Contains(content, `GANTRY_ORIG_ZDOTDIR`) {
 		t.Error("zsh rcfile should reference GANTRY_ORIG_ZDOTDIR")
@@ -107,8 +107,8 @@ func TestGenerateZshRcContent(t *testing.T) {
 	if !strings.Contains(content, `source "$HOME/.zshrc"`) {
 		t.Error("zsh rcfile should have fallback to source ~/.zshrc")
 	}
-	if !strings.Contains(content, `PROMPT="(gantry) $PROMPT"`) {
-		t.Error("zsh rcfile should modify PROMPT with (gantry) prefix")
+	if !strings.Contains(content, `PROMPT="(gantry - Claude Code) $PROMPT"`) {
+		t.Error("zsh rcfile should modify PROMPT with (gantry - Claude Code) prefix")
 	}
 }
 
