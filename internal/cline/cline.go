@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
@@ -19,12 +20,22 @@ type ConfigureResult struct {
 	Message    string
 }
 
+// sanitizeModel strips context window suffixes like "[1m]" that are specific
+// to Claude Code and not recognized by other tools.
+func sanitizeModel(model string) string {
+	if idx := strings.Index(model, "["); idx >= 0 {
+		return model[:idx]
+	}
+	return model
+}
+
 // ConfigureProvider runs cline auth to configure the OpenAI-native provider with the LiteLLM gateway
 func ConfigureProvider(litellmConfig *config.LiteLLMConfig) error {
+	model := sanitizeModel(litellmConfig.Model)
 	cmd := exec.Command("cline", "auth",
 		"--provider", "openai-native",
 		"--apikey", litellmConfig.AuthToken,
-		"--modelid", litellmConfig.Model,
+		"--modelid", model,
 		"--baseurl", litellmConfig.BaseURL,
 	)
 
@@ -43,12 +54,14 @@ func ConfigurePlugin(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, err
 		return nil, err
 	}
 
+	model := sanitizeModel(litellmConfig.Model)
+
 	// Build desired provider config
 	desired := map[string]interface{}{
 		"openai-native": map[string]interface{}{
 			"apiKey":  litellmConfig.AuthToken,
 			"baseUrl": litellmConfig.BaseURL,
-			"modelId": litellmConfig.Model,
+			"modelId": model,
 		},
 	}
 
@@ -59,7 +72,7 @@ func ConfigurePlugin(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, err
 			if provider, ok := existing["openai-native"].(map[string]interface{}); ok {
 				if provider["apiKey"] == litellmConfig.AuthToken &&
 					provider["baseUrl"] == litellmConfig.BaseURL &&
-					provider["modelId"] == litellmConfig.Model {
+					provider["modelId"] == model {
 					return &ConfigureResult{
 						Updated:    false,
 						ConfigPath: configPath,
