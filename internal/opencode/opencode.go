@@ -214,6 +214,14 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 		} else {
 			needsUpdate = true
 		}
+		// Check if model list needs updating
+		if models, ok := currentProvider["models"].(map[string]interface{}); ok {
+			if len(models) != 6 {
+				needsUpdate = true
+			}
+		} else {
+			needsUpdate = true
+		}
 	}
 
 	if !needsUpdate {
@@ -251,17 +259,23 @@ func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, er
 			"apiKey":  litellmConfig.AuthToken,
 		},
 		"models": map[string]interface{}{
-			"claude-haiku-4-5-20251001": map[string]interface{}{
-				"name": "Claude Haiku 4.5",
-			},
 			"claude-opus-4-6": map[string]interface{}{
 				"name": "Claude Opus 4.6",
 			},
 			"claude-sonnet-4-6": map[string]interface{}{
 				"name": "Claude Sonnet 4.6",
 			},
-			"gpt-5.2-codex": map[string]interface{}{
-				"name": "GPT 5.2 Codex",
+			"claude-haiku-4-5-20251001-v1:0": map[string]interface{}{
+				"name": "Claude Haiku 4.5",
+			},
+			"gpt-5.6-sol": map[string]interface{}{
+				"name": "GPT 5.6 Sol",
+			},
+			"gpt-5.6-terra": map[string]interface{}{
+				"name": "GPT 5.6 Terra",
+			},
+			"gpt-5.6-luna": map[string]interface{}{
+				"name": "GPT 5.6 Luna",
 			},
 		},
 	}
