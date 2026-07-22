@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
 )
@@ -13,13 +12,12 @@ import (
 // ConfigureResult contains the result of configuring Codex
 type ConfigureResult struct {
 	Updated    bool
-	BackupPath string
 	ConfigPath string
 	Message    string
 }
 
-// GetConfigPath returns the path to the Codex config file
-func GetConfigPath() (string, error) {
+// GetProfilePath returns the path to the gantry profile config file
+func GetProfilePath() (string, error) {
 	codexHome := os.Getenv("CODEX_HOME")
 	if codexHome == "" {
 		home, err := os.UserHomeDir()
@@ -28,87 +26,54 @@ func GetConfigPath() (string, error) {
 		}
 		codexHome = filepath.Join(home, ".codex")
 	}
-	return filepath.Join(codexHome, "config.toml"), nil
+	return filepath.Join(codexHome, "gantry.config.toml"), nil
 }
 
-// BackupConfig creates a timestamped backup of the Codex config
-func BackupConfig(configPath string) (string, error) {
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return "", nil
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read config for backup: %w", err)
-	}
-
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	backupPath := fmt.Sprintf("%s.%s.gantrybackup", configPath, timestamp)
-
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		return "", fmt.Errorf("failed to write backup: %w", err)
-	}
-
-	return backupPath, nil
-}
-
-// ConfigureProvider writes the Codex config.toml with LiteLLM gateway and OTel settings
+// ConfigureProvider writes the gantry profile config for Codex
 func ConfigureProvider(model string, litellmConfig *config.LiteLLMConfig, otelConfig config.OTELConfig) (*ConfigureResult, error) {
-	configPath, err := GetConfigPath()
+	profilePath, err := GetProfilePath()
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate desired config content
 	desiredContent := generateConfigContent(model, litellmConfig, otelConfig)
 
-	// Check if existing config already matches
-	if existingData, err := os.ReadFile(configPath); err == nil {
+	// Check if existing profile already matches
+	if existingData, err := os.ReadFile(profilePath); err == nil {
 		if string(existingData) == desiredContent {
 			return &ConfigureResult{
 				Updated:    false,
-				ConfigPath: configPath,
-				Message:    "Codex configuration is already up to date",
+				ConfigPath: profilePath,
+				Message:    "Codex gantry profile is already up to date",
 			}, nil
 		}
 	}
 
-	// Create backup before modifying
-	backupPath, err := BackupConfig(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create backup: %w", err)
-	}
-
 	// Ensure the config directory exists
-	configDir := filepath.Dir(configPath)
+	configDir := filepath.Dir(profilePath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, []byte(desiredContent), 0644); err != nil {
-		return nil, fmt.Errorf("failed to write Codex config: %w", err)
+	if err := os.WriteFile(profilePath, []byte(desiredContent), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write Codex profile: %w", err)
 	}
 
-	result := &ConfigureResult{
+	return &ConfigureResult{
 		Updated:    true,
-		BackupPath: backupPath,
-		ConfigPath: configPath,
-		Message:    "Codex configuration updated",
-	}
-
-	if backupPath != "" {
-		result.Message = fmt.Sprintf("Codex configuration updated (backup: %s)", filepath.Base(backupPath))
-	}
-
-	return result, nil
+		ConfigPath: profilePath,
+		Message:    "Codex gantry profile updated",
+	}, nil
 }
 
 func generateConfigContent(model string, litellmConfig *config.LiteLLMConfig, otelConfig config.OTELConfig) string {
 	var sb strings.Builder
 
-	sb.WriteString("# Managed by gantry - LiteLLM gateway configuration\n")
+	sb.WriteString("# Gantry profile for Codex - LiteLLM gateway configuration\n")
+	sb.WriteString("# Launch with: codex --profile gantry\n")
 	sb.WriteString(fmt.Sprintf("model = %q\n", model))
 	sb.WriteString("model_provider = \"gantry-litellm\"\n")
+	sb.WriteString("model_reasoning_effort = \"medium\"\n")
 	sb.WriteString("\n")
 	sb.WriteString("[model_providers.gantry-litellm]\n")
 	sb.WriteString("name = \"Gantry LiteLLM Gateway\"\n")

@@ -89,7 +89,7 @@ func LoadGlobalConfig() (*GlobalConfig, error) {
 
 	// Auto-migrate: add codex section with default model if missing
 	if config.Codex == nil {
-		config.Codex = &CodexConfig{Model: "gpt-5.5"}
+		config.Codex = &CodexConfig{Model: "gpt-5.6-terra"}
 		_ = SaveGlobalConfig(&config)
 	}
 

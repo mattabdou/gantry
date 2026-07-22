@@ -293,9 +293,10 @@ func LaunchOpenCodeDesktop(env []string) error {
 	return nil
 }
 
-// LaunchCodex spawns OpenAI Codex CLI with the configured environment
+// LaunchCodex spawns OpenAI Codex CLI with the gantry profile and configured environment
 func LaunchCodex(args []string, env []string) error {
-	cmd := exec.Command("codex", args...)
+	codexArgs := append([]string{"--profile", "gantry"}, args...)
+	cmd := exec.Command("codex", codexArgs...)
 	cmd.Env = env
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
