@@ -20,10 +20,11 @@ type GantryConfig struct {
 	IgnorePowerline        *bool  `json:"ignorePowerline,omitempty"`
 	EnablePowerline        *bool  `json:"enablePowerline,omitempty"`
 	BypassLoadingScreen    *bool  `json:"bypassLoadingScreen,omitempty"`
-	AutoUpdate             *bool  `json:"autoUpdate,omitempty"`             // Auto-update gantry on launch when update available
+	AutoUpdate             *bool  `json:"autoUpdate,omitempty"` // Auto-update gantry on launch when update available
 	CheckForUpdateOnLaunch *bool  `json:"checkForUpdateOnLaunch,omitempty"`
-	LastUpdateCheck        string `json:"lastUpdateCheck,omitempty"`  // RFC3339 timestamp of last update check
-	LastUpdateResult       string `json:"lastUpdateResult,omitempty"` // Cached latest version from last check
+	AllowDangerousHeadless *bool  `json:"allowDangerousHeadless,omitempty"` // Allow 'gantry exec' to bypass tool permission checks (nil = true)
+	LastUpdateCheck        string `json:"lastUpdateCheck,omitempty"`        // RFC3339 timestamp of last update check
+	LastUpdateResult       string `json:"lastUpdateResult,omitempty"`       // Cached latest version from last check
 }
 
 // OTELConfig contains OpenTelemetry configuration

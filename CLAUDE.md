@@ -21,6 +21,8 @@ gantry/
 │   ├── config.go               # 'gantry config' - interactive/CLI config management
 │   ├── models.go               # 'gantry models' - list LiteLLM models
 │   ├── cost.go                 # 'gantry cost' - show API spend from telemetry data
+│   ├── exec.go                 # 'gantry exec' - headless/non-interactive run for IDEs
+│   ├── tools.go                # 'gantry tools' - list supported AI tools
 │   ├── version.go              # 'gantry version' - displays version info
 │   └── update.go               # 'gantry update' - self-update functionality
 ├── internal/
@@ -30,6 +32,7 @@ gantry/
 │   ├── launcher/               # Tool launcher
 │   │   ├── launcher.go         # Environment building, resource attributes, launch process
 │   │   ├── detection.go        # Tool installation detection (Claude Code, OpenCode)
+│   │   ├── headless.go         # Headless arg builders, OTEL clamping, RunHeadless spawner
 │   │   └── shell.go            # Shell mode: spawn user's shell with configured environment
 │   ├── opencode/               # OpenCode integration
 │   │   └── opencode.go         # OpenCode config file management (~/.config/opencode/opencode.json)
@@ -69,6 +72,7 @@ make clean          # Remove build artifacts
 - `ignorePowerline` - Skip all powerline configuration (default: true)
 - `enablePowerline` - Whether to configure powerline status bar (default: true, requires ignorePowerline=false)
 - `bypassLoadingScreen` - Skip the confirmation screen on startup (default: false)
+- `allowDangerousHeadless` - Allow `gantry exec` to bypass the tool's permission checks. **Undefined means `true`** so that headless mode works for configs that predate the setting; set it to `false` to disable bypass fleet-wide
 
 **otel section:**
 - `endpoint` - OTEL collector endpoint URL (required)
@@ -130,6 +134,71 @@ When using OpenCode (oc or ocd), GANTRY:
 
 Note: OTEL telemetry and powerline are Claude Code features and are not configured for OpenCode.
 
+## Headless Mode (`gantry exec`)
+
+`gantry exec [flags] "<prompt>" [-- tool-args...]` runs an AI tool non-interactively and exits.
+It exists so an IDE (or any automation) can spawn a fully configured AI session per request with
+a single command.
+
+**Supported tools:** `cc` (Claude Code), `co` (Codex), `oc` (OpenCode Terminal). `ocd` and the
+Cline variants have no non-interactive entrypoint and are rejected with a clear error.
+
+**Per-tool command mapping** (built by `launcher.BuildHeadlessArgs`):
+
+| Tool | Command | Permission bypass | `-o json` | `-o stream-json` |
+|------|---------|-------------------|-----------|------------------|
+| `cc` | `claude -p "<prompt>"` | `--dangerously-skip-permissions` | `--output-format json` | `--output-format stream-json --verbose` |
+| `co` | `codex --profile gantry exec "<prompt>" --skip-git-repo-check` | `--dangerously-bypass-approvals-and-sandbox` | `--json` | `--json` |
+| `oc` | `opencode run "<prompt>"` | `--auto` | `--format json` | `--format json` |
+
+Argument order is deliberate, not cosmetic:
+- **cc**: the prompt goes immediately after `-p`, *before* passthrough args. Claude Code has
+  variadic flags (`--add-dir`, `--allowedTools`, `--tools`) that would otherwise swallow a
+  trailing prompt.
+- **cc + stream-json**: `--verbose` is added automatically because Claude Code hard-errors with
+  `When using --print, --output-format=stream-json requires --verbose`.
+- **oc**: `run` takes a variadic `message` positional, so the prompt goes last.
+- **co**: `--profile` is a global flag and must precede the `exec` subcommand.
+
+**What `exec` deliberately skips, and why:**
+- **Confirmation screen** - it reads stdin (`root.go` `runGantry`) and would consume a piped prompt.
+- **Update check and auto-update** - auto-update can download a binary and `syscall.Exec` itself
+  mid-invocation. An IDE must never have gantry swap its own binary under a live request.
+- **Powerline** - a statusline for interactive TUIs; skipping it also removes a read-modify-write
+  race on `~/.claude/settings.json` between concurrent invocations.
+- **Config auto-migration** - `exec` uses `config.LoadGlobalConfigRaw()` plus an explicit
+  `config.ValidateGlobalConfig()` instead of `LoadGlobalConfig()`, because the latter performs up
+  to four non-atomic `SaveGlobalConfig()` writes that concurrent invocations could interleave.
+  Consequence: the `codex` section may legitimately be nil, so `exec` falls back to
+  `defaultCodexModel` rather than dereferencing it.
+
+**I/O contract:**
+- **stdout** carries only the tool's output, so `-o json` is directly parseable. `cmd/exec.go`
+  contains no `fmt.Print*` calls; `TestExecStdoutPurity` enforces this by scanning the source.
+- **stderr** carries all gantry diagnostics, prefixed `gantry exec:` so an IDE can tell a gantry
+  failure from a tool failure. Silent unless `--verbose`.
+- **stdin** is never read unless `--stdin` is passed. The child gets `/dev/null`, which also
+  normalizes behavior across tools (`codex exec` would otherwise append inherited stdin to the
+  prompt).
+- **Exit code** is the tool's own. `launcher.RunHeadless` returns it rather than calling
+  `os.Exit`, so it stays testable. Gantry-level failures exit 1. `SIGINT`/`SIGTERM` are relayed to
+  the child so an IDE cancel does not orphan a running tool.
+
+**Permission bypass** is on by default, controlled by `gantry.allowDangerousHeadless`
+(undefined = true) and overridable per run with `--no-skip-permissions`. When the config disables
+it, the run continues without bypass and prints an unmistakable stderr warning.
+
+**Running as root:** Claude Code refuses `--dangerously-skip-permissions` as root. `exec` detects
+this and fails with an explanatory error rather than working around the check. Setting
+`IS_SANDBOX=1` is left to the operator as a deliberate choice.
+
+**Telemetry:** headless runs add `gantry.headless=true`, `gantry.invocation=exec`, `gantry.tool`
+and `gantry.output_format` to `OTEL_RESOURCE_ATTRIBUTES`, so automated spend can be separated from
+interactive spend. The OTEL export intervals are clamped to 5s
+(`launcher.ClampHeadlessOTEL`) because the default `metricExportInterval` of 60000ms is longer
+than a typical headless run. Reachability differs by tool: full for `cc`, via its own TOML `[otel]`
+block for `co`, and **none for `oc`** (OpenCode consumes no `OTEL_*` variables).
+
 ## Code Patterns
 
 ### Config Loading
@@ -150,7 +219,18 @@ Dot notation for get/set operations (e.g., `gantry config set otel.endpoint http
   - Linux: `/usr/bin/opencode-desktop`, desktop entries
 
 ### Command Structure
-Uses Cobra with `DisableFlagParsing: true` on root command to pass unknown flags through to the AI tool. Subcommands (init, config, update, version, models, cost) are detected and handled specially in `root.go:runGantry()`.
+Uses Cobra with `DisableFlagParsing: true` on the root command to pass unknown flags through to the AI tool.
+
+Subcommand routing is done by Cobra's own `Find()`, which runs *before* flag parsing and is
+therefore unaffected by `DisableFlagParsing` - a bare first argument matching a subcommand name
+(`init`, `config`, `update`, `version`, `models`, `cost`, `tools`, `exec`) is dispatched without
+ever entering `runGantry`. The hardcoded subcommand list inside `runGantry` is a vestige of an
+earlier design and is unreachable for those invocations.
+
+One consequence worth knowing: because `Find()` matches on the first bare argument, a passthrough
+argument that happens to equal a subcommand name is captured by that subcommand
+(`gantry --agent version` errors instead of passing `--agent version` to Claude Code). Quote
+multi-word prompts, or use `gantry exec` where the prompt is an explicit positional.
 
 ### Self-Update
 Downloads platform-specific binary from GitHub releases (`mattabdou/gantry`), replaces current executable. Supports two release channels:
@@ -161,12 +241,17 @@ Channel preference is stored in `gantry.release` config. Users switch channels v
 
 ## Testing
 
-Each internal package has corresponding `*_test.go` files. Run with:
+Each internal package has corresponding `*_test.go` files, plus `cmd/exec_test.go`. Run with:
 
 ```bash
 make test
 make test-coverage  # Generates coverage.html
 ```
+
+Conventions: table-driven subtests, standard library `testing` only (the sole dependency is
+`spf13/cobra`), and tests live in the same package as the code so unexported helpers are testable
+directly. Prefer extracting a pure builder that returns a value over asserting on side effects -
+`powerline.BuildPowerlineCommand` and `launcher.BuildHeadlessArgs` are the models to follow.
 
 ## Version
 

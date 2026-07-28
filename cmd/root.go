@@ -924,6 +924,7 @@ Usage:
   gantry [options] [tool-args...]           Run AI tool with GANTRY configuration
   gantry --shell [options]                  Start a configured shell session
   gantry --resetconfig [--tool <tool>]      Reset tool configuration to defaults
+  gantry exec [options] "<prompt>"          Run the AI tool non-interactively (headless)
   gantry init [--force]                     Create the global configuration file
   gantry config                             Interactive configuration editor
   gantry config show                        Display current configuration
@@ -954,6 +955,16 @@ Options:
 
   --resetconfig, -r               Reset the selected tool's configuration to defaults
                                   Creates a backup before resetting
+
+Headless Mode (gantry exec):
+  Runs the AI tool non-interactively with a prompt and exits. Intended for IDEs
+  and automation. Permission checks are bypassed by default, stdout carries only
+  the tool's output, and the confirmation screen, update check and powerline
+  configuration are all skipped.
+
+  Supported tools: cc (Claude Code), co (Codex), oc (OpenCode Terminal)
+
+  Run 'gantry exec --help' for the full flag list.
 
 Tools:
   cc                              Claude Code - Anthropic's CLI for Claude
@@ -994,6 +1005,10 @@ Examples:
   gantry -s -t cc --mode bedrock  Shell with Bedrock Claude Code config
   gantry --resetconfig            Reset default tool's config to defaults
   gantry -r -t oc                 Reset OpenCode configuration to defaults
+  gantry exec "fix the failing test"
+                                  Run a headless session and print the result
+  gantry exec -o json "add tests" Headless run with machine-readable output
+  gantry exec --print-command "x" Show the resolved tool command without running it
   gantry init                     Initialize global configuration
   gantry init --force             Reinitialize global configuration
   gantry config                   Edit configuration interactively

@@ -584,6 +584,90 @@ func TestGetReleaseChannel(t *testing.T) {
 	}
 }
 
+func TestAllowDangerousHeadless(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *GlobalConfig
+		expected bool
+	}{
+		{
+			// The three nil cases are the point of the setting: users whose
+			// config predates it must not be blocked from headless mode.
+			name:     "nil config defaults to allowed",
+			config:   nil,
+			expected: true,
+		},
+		{
+			name:     "nil gantry section defaults to allowed",
+			config:   &GlobalConfig{},
+			expected: true,
+		},
+		{
+			name:     "undefined key defaults to allowed",
+			config:   &GlobalConfig{Gantry: &GantryConfig{Username: "alice"}},
+			expected: true,
+		},
+		{
+			name: "explicitly enabled",
+			config: &GlobalConfig{Gantry: &GantryConfig{
+				AllowDangerousHeadless: func() *bool { v := true; return &v }(),
+			}},
+			expected: true,
+		},
+		{
+			name: "explicitly disabled",
+			config: &GlobalConfig{Gantry: &GantryConfig{
+				AllowDangerousHeadless: func() *bool { v := false; return &v }(),
+			}},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AllowDangerousHeadless(tt.config); got != tt.expected {
+				t.Errorf("AllowDangerousHeadless() = %v, expected %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSetConfigValueAllowDangerousHeadless(t *testing.T) {
+	// The key must be registered as a boolean, otherwise it is written as the
+	// JSON string "false", fails to unmarshal into *bool, and the kill switch
+	// silently stays on.
+	tests := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		{"false", "false", false},
+		{"true", "true", true},
+		{"1", "1", true},
+		{"yes", "yes", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &GlobalConfig{Gantry: &GantryConfig{Username: "alice"}}
+
+			if err := SetConfigValue(cfg, "gantry.allowDangerousHeadless", tt.value); err != nil {
+				t.Fatalf("SetConfigValue() error = %v", err)
+			}
+
+			if cfg.Gantry.AllowDangerousHeadless == nil {
+				t.Fatal("AllowDangerousHeadless is nil; the key was likely coerced to a string instead of a bool")
+			}
+			if *cfg.Gantry.AllowDangerousHeadless != tt.expected {
+				t.Errorf("AllowDangerousHeadless = %v, expected %v", *cfg.Gantry.AllowDangerousHeadless, tt.expected)
+			}
+			if got := AllowDangerousHeadless(cfg); got != tt.expected {
+				t.Errorf("AllowDangerousHeadless() = %v, expected %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestValidReleaseChannels(t *testing.T) {
 	// Ensure the ValidReleaseChannels slice has the expected values
 	expected := []string{"stable", "beta"}

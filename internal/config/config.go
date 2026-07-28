@@ -137,6 +137,20 @@ func GetReleaseChannel(config *GlobalConfig) string {
 	return config.Gantry.Release
 }
 
+// AllowDangerousHeadless reports whether 'gantry exec' may pass permission-bypass
+// flags to the launched tool.
+//
+// The key is deliberately opt-out rather than opt-in: an undefined
+// gantry.allowDangerousHeadless returns true so that headless mode works for
+// users whose ~/.gantryrc.json predates the setting. Administrators disable it
+// explicitly by setting it to false.
+func AllowDangerousHeadless(config *GlobalConfig) bool {
+	if config == nil || config.Gantry == nil || config.Gantry.AllowDangerousHeadless == nil {
+		return true
+	}
+	return *config.Gantry.AllowDangerousHeadless
+}
+
 // BackupConfigForChannelSwitch creates a backup of the config file when switching channels
 // Returns the backup path if created, empty string if backup already exists, or error
 func BackupConfigForChannelSwitch(fromChannel, toChannel string) (string, error) {
@@ -476,6 +490,7 @@ func SetConfigValue(config *GlobalConfig, key string, value string) error {
 		"includeVersion": true, "includeAccountUuid": true,
 		"ignorePowerline": true, "enablePowerline": true, "bypassLoadingScreen": true,
 		"checkForUpdateOnLaunch": true, "autoUpdate": true,
+		"allowDangerousHeadless": true,
 	}
 	numberKeys := map[string]bool{
 		"metricExportInterval": true, "logsExportInterval": true,

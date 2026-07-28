@@ -15,12 +15,15 @@ gantry automatically configures AI coding tools with:
   - **Git Branch** - Current working branch (for issue/PR tracking)
   - **Working Path** - Where the developer is working
 - **claude-powerline** - Configures status bar theme and style (Claude Code only)
+- **Headless Mode** - One command (`gantry exec`) for IDEs and automation that run a
+  non-interactive AI session per request
 
 This data flows to your OTEL collector and can be visualized in Grafana to answer questions like:
 
 - How much is each developer spending on AI?
 - How much AI spend is attributed to each project?
 - What's the AI cost for a specific feature branch or issue?
+- How much spend comes from IDE/automation runs versus interactive sessions?
 
 ## Installation
 
@@ -315,6 +318,84 @@ gantry --help         # Show gantry help
 gantry --version      # Show gantry version
 ```
 
+## Headless Mode (IDE Integration)
+
+Some IDEs start an AI coding session per request rather than giving you a terminal. `gantry exec`
+is the single command you can hand to such an IDE: it applies all the usual gantry configuration,
+runs the tool non-interactively with your prompt, prints the result, and exits.
+
+```bash
+# Run a headless session and print the result
+gantry exec "fix the failing auth test"
+
+# Machine-readable output for the IDE to parse
+gantry exec --output-format json "add tests for the parser"
+gantry exec -o stream-json "refactor the config loader"
+
+# Pick a tool or mode for this run
+gantry exec -t co -m litellm "explain this module"
+
+# Long prompts without shell quoting pain
+gantry exec --prompt-file ./task.md
+cat task.md | gantry exec --stdin
+
+# Pass extra flags straight to the underlying tool
+gantry exec "add tests" -- --add-dir /tmp/scratch
+
+# See exactly what would run, without running it
+gantry exec --print-command "fix the bug"
+```
+
+**Supported tools:** `cc` (Claude Code), `co` (Codex), `oc` (OpenCode Terminal).
+
+> ⚠️ **Permission checks are bypassed by default.** The tool can edit files and run commands
+> without asking. That is the point of headless mode, but only point an IDE at repositories where
+> that is acceptable. Disable it for a single run with `--no-skip-permissions`, or everywhere by
+> setting `gantry.allowDangerousHeadless` to `false`.
+
+### Output contract
+
+Built so an IDE can parse the result reliably:
+
+| Stream | Contents |
+|--------|----------|
+| **stdout** | Only the tool's output. With `-o json` this is valid JSON with nothing prepended. |
+| **stderr** | Gantry diagnostics only, each prefixed `gantry exec:`. Silent unless `--verbose`. |
+| **stdin** | Never read unless you pass `--stdin`. |
+| **exit code** | The tool's own exit code. Gantry's own failures exit `1`. |
+
+`gantry exec` also skips the confirmation screen, the update check, auto-update and powerline
+configuration, so nothing unexpected happens mid-request and nothing pollutes stdout. Cancelling
+the IDE's request (`SIGINT`/`SIGTERM`) is forwarded to the tool rather than orphaning it.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--tool, -t` | Tool to run: `cc`, `co`, `oc` |
+| `--mode, -m` | Provider mode: `bedrock` or `litellm` |
+| `--output-format, -o` | `text` (default), `json`, or `stream-json` |
+| `--model` | Override the model for this run |
+| `--prompt-file` | Read the prompt from a file |
+| `--stdin` | Read the prompt from stdin |
+| `--no-skip-permissions` | Do not bypass the tool's permission checks |
+| `--no-configure` | Skip provider configuration file writes |
+| `--verbose` | Log the resolved configuration to stderr |
+| `--print-command` | Print the resolved command to stderr and exit without running it |
+
+Gantry's own flags must come **before** the prompt. Anything after the prompt (or after `--`) is
+passed to the tool verbatim.
+
+### Notes
+
+- **Running as root** (common in containerized IDE backends): Claude Code refuses
+  `--dangerously-skip-permissions` as root. `gantry exec` reports this clearly rather than
+  silently working around it. Run as a non-root user, or use `--no-skip-permissions`.
+- **Telemetry:** headless runs are tagged so you can separate automated spend from interactive
+  spend - see [Telemetry Attributes](#telemetry-attributes). OpenCode does not emit OTEL telemetry.
+- **Debugging:** if the IDE reports an unexpected failure, run the same command with
+  `--print-command` and then `--verbose` to see what gantry resolved.
+
 ## Confirmation Screen
 
 When you run `gantry`, it displays a confirmation screen showing all the configuration that will be applied before launching the AI tool:
@@ -429,6 +510,7 @@ Use dot notation for nested values:
 | `gantry.enablePowerline` | boolean | Enable powerline status bar (requires ignorePowerline=false) |
 | `gantry.bypassLoadingScreen` | boolean | Skip confirmation screen on startup |
 | `gantry.checkForUpdateOnLaunch` | boolean | Check for updates on startup (default: true) |
+| `gantry.allowDangerousHeadless` | boolean | Allow `gantry exec` to bypass tool permission checks (default: true when unset) |
 | `bedrock.awsProfile` | string | AWS profile name |
 | `bedrock.awsRegion` | string | AWS region |
 | `bedrock.model` | string | Anthropic model ID |
@@ -468,6 +550,23 @@ gantry adds the following resource attributes to OTEL telemetry:
 | `gantry.team` | `.gantry.json` | `platform` |
 | `gantry.cost_center` | `.gantry.json` | `ENG-001` |
 | `gantry.git_branch` | Git current branch | `feature/JIRA-123-add-auth` |
+| `gantry.version` | gantry version | `1.2.1-beta.9` |
+
+### Headless attributes
+
+Runs started with [`gantry exec`](#headless-mode-ide-integration) add these, so IDE- and
+automation-driven spend can be told apart from interactive developer spend:
+
+| Attribute | Source | Example |
+|-----------|--------|---------|
+| `gantry.headless` | Always `true` for `gantry exec` | `true` |
+| `gantry.invocation` | How gantry was invoked | `exec` |
+| `gantry.tool` | Tool short name | `cc` |
+| `gantry.output_format` | Requested output format | `json` |
+
+Headless runs also clamp the OTEL export intervals to 5s, because a headless session often
+finishes faster than the default 60s `metricExportInterval` and its cost metrics would otherwise
+risk never being exported.
 
 ## Grafana Queries
 
@@ -491,6 +590,12 @@ sum by (gantry_git_branch) (claude_code_tokens_total)
 
 # Cost center breakdown
 sum by (gantry_cost_center) (claude_code_tokens_total)
+
+# Interactive vs headless (IDE/automation) spend
+sum by (gantry_headless) (claude_code_tokens_total)
+
+# Headless spend by user
+sum by (gantry_username) (claude_code_tokens_total{gantry_headless="true"})
 ```
 
 ### Loki (Logs)
