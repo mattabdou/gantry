@@ -51,9 +51,43 @@ gantry/
 make build          # Build for current platform
 make test           # Run tests
 make build-all      # Cross-compile for all platforms (Linux/macOS/Windows, AMD64/ARM64)
-make release        # Build all and create release archives
+make release        # Build all and archive - macOS binaries are NOT signed
+make release-signed # Build, codesign, notarize, then archive (macOS only) - use this to ship
 make clean          # Remove build artifacts
 ```
+
+### macOS signing targets
+
+`make release-signed` is the target to use for an actual release. It runs `build-all`,
+`sign-darwin`, `notarize-darwin` and `archives` **in that order**, which matters: the archives must
+be built from the already-signed binaries. Plain `make release` archives unsigned macOS binaries
+and prints a warning saying so.
+
+```bash
+make sign-darwin     # Codesign with a Developer ID cert (hardened runtime + secure timestamp)
+make verify-darwin   # Verify the signatures locally, no network
+make notarize-darwin # Submit to Apple's notary service and wait
+```
+
+Signing uses `SIGN_IDENTITY` (matched by certificate *name*, so it survives certificate renewal)
+and `NOTARY_PROFILE`, both overridable:
+
+```bash
+make release-signed SIGN_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE=my-profile
+```
+
+Notarization credentials come from a `notarytool` keychain profile, created once with
+`xcrun notarytool store-credentials`. `notarize-darwin` fails with the exact command to run if the
+profile is missing.
+
+Two behaviors that look like bugs but are not:
+- The notarization ticket is **not stapled**. A ticket can only be stapled into a bundle/dmg/pkg;
+  `xcrun stapler staple` on a bare Mach-O fails with Error 73. Gatekeeper does an online lookup
+  instead, so a notarized CLI binary needs network access on first run.
+- Immediately after Apple returns `status: Accepted`, `spctl` may still report
+  `Unnotarized Developer ID` for a minute or two while the ticket propagates. To confirm the
+  ticket really covers the binary, compare `codesign -dvvv` `CDHash` with the `cdhash` in
+  `xcrun notarytool log <submission-id>`.
 
 ## Key Configuration Files
 
@@ -266,7 +300,7 @@ Current version is defined in two places (both must be updated for releases):
 When creating a new stable release:
 
 1. **Update version** in both `cmd/version.go` and `Makefile`
-2. **Build binaries**: Run `make clean && make release`
+2. **Build, sign and notarize binaries**: Run `make clean && make release-signed` (on macOS)
 3. **Create GitHub release** with `gh release create vX.Y.Z` including:
 
 **Versioned archives** (for manual installation):
@@ -292,7 +326,7 @@ When creating a new stable release:
 For beta releases that won't notify stable users:
 
 1. **Update version** with beta suffix (e.g., `1.1.6-beta.1`) in `cmd/version.go` and `Makefile`
-2. **Build binaries**: Run `make clean && make release`
+2. **Build, sign and notarize binaries**: Run `make clean && make release-signed` (on macOS)
 3. **Create GitHub pre-release** with `gh release create vX.Y.Z-beta.N --prerelease` including the same assets as stable
 
 **Key differences for pre-releases:**
