@@ -14,6 +14,33 @@ type ToolDetectionResult struct {
 	Error     error
 }
 
+// ClaudeCodeInstallDocsURL is Anthropic's install and setup documentation for
+// Claude Code, covering every install method and platform.
+const ClaudeCodeInstallDocsURL = "https://code.claude.com/docs/en/setup"
+
+// ClaudeCodeInstallCommand returns the recommended install command for Claude
+// Code on the current platform.
+//
+// This is Anthropic's native installer, which self-updates in the background.
+// GANTRY used to point users at `npm install -g @anthropic-ai/claude-code`; that
+// still works but is now documented only under advanced options, and it requires
+// Node.js 22+. Point users at the native installer, and at
+// ClaudeCodeInstallDocsURL for Homebrew, WinGet, apt/dnf/apk and the Windows CMD
+// variant.
+func ClaudeCodeInstallCommand() string {
+	return claudeCodeInstallCommandFor(runtime.GOOS)
+}
+
+// claudeCodeInstallCommandFor takes the GOOS explicitly so it is testable for
+// platforms other than the one running the tests.
+func claudeCodeInstallCommandFor(goos string) string {
+	if goos == "windows" {
+		// PowerShell. The docs cover the CMD form for anyone not in PowerShell.
+		return "irm https://claude.ai/install.ps1 | iex"
+	}
+	return "curl -fsSL https://claude.ai/install.sh | bash"
+}
+
 // DetectClaudeCode checks if Claude Code is installed
 func DetectClaudeCode() ToolDetectionResult {
 	claudeCmd := GetClaudeCommand()

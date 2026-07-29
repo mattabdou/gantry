@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -12,6 +13,48 @@ func TestDetectClaudeCode(t *testing.T) {
 	// Should return a valid result (either installed or not)
 	if result.Installed && result.Path == "" {
 		t.Error("If installed, path should be set")
+	}
+}
+
+// The install hint must name Anthropic's native installer, not npm. npm still
+// works but is documented only under advanced options and needs Node.js 22+, so
+// it is the wrong thing to tell a user who just failed to launch.
+func TestClaudeCodeInstallCommandFor(t *testing.T) {
+	tests := []struct {
+		goos string
+		want string
+	}{
+		{"darwin", "curl -fsSL https://claude.ai/install.sh | bash"},
+		{"linux", "curl -fsSL https://claude.ai/install.sh | bash"},
+		{"windows", "irm https://claude.ai/install.ps1 | iex"},
+		{"freebsd", "curl -fsSL https://claude.ai/install.sh | bash"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			got := claudeCodeInstallCommandFor(tt.goos)
+			if got != tt.want {
+				t.Errorf("claudeCodeInstallCommandFor(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+			if strings.Contains(got, "npm") {
+				t.Errorf("install command still points at npm: %q", got)
+			}
+		})
+	}
+}
+
+func TestClaudeCodeInstallCommandUsesHostPlatform(t *testing.T) {
+	if got, want := ClaudeCodeInstallCommand(), claudeCodeInstallCommandFor(runtime.GOOS); got != want {
+		t.Errorf("ClaudeCodeInstallCommand() = %q, want %q", got, want)
+	}
+}
+
+func TestClaudeCodeInstallDocsURL(t *testing.T) {
+	if !strings.HasPrefix(ClaudeCodeInstallDocsURL, "https://") {
+		t.Errorf("ClaudeCodeInstallDocsURL = %q, want an https URL", ClaudeCodeInstallDocsURL)
+	}
+	if strings.Contains(ClaudeCodeInstallDocsURL, "npm") {
+		t.Errorf("docs URL points at npm: %q", ClaudeCodeInstallDocsURL)
 	}
 }
 

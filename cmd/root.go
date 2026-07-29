@@ -307,7 +307,10 @@ func runGantry(cmd *cobra.Command, args []string) {
 			} else {
 				fmt.Fprintln(os.Stderr, "Error: Claude Code installation not detected.")
 				fmt.Fprintln(os.Stderr, "")
-				fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
+				fmt.Fprintln(os.Stderr, "Install Claude Code with:")
+				fmt.Fprintf(os.Stderr, "  %s\n", launcher.ClaudeCodeInstallCommand())
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintf(os.Stderr, "Other install methods: %s\n", launcher.ClaudeCodeInstallDocsURL)
 				fmt.Fprintln(os.Stderr, "")
 				os.Exit(1)
 			}
@@ -835,7 +838,8 @@ func runGantry(cmd *cobra.Command, args []string) {
 		if err := launcher.LaunchClaude(filteredArgs, env); err != nil {
 			if err.Error() == "executable file not found in $PATH" || err.Error() == "executable file not found in %PATH%" {
 				fmt.Fprintln(os.Stderr, "Error: Claude Code is not installed or not in PATH.")
-				fmt.Fprintln(os.Stderr, "Please install Claude Code: npm install -g @anthropic-ai/claude-code")
+				fmt.Fprintf(os.Stderr, "Install it with: %s\n", launcher.ClaudeCodeInstallCommand())
+				fmt.Fprintf(os.Stderr, "Other install methods: %s\n", launcher.ClaudeCodeInstallDocsURL)
 			} else {
 				fmt.Fprintf(os.Stderr, "Error starting Claude Code: %v\n", err)
 			}

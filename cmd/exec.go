@@ -280,7 +280,8 @@ func detectExecTool(tool string) error {
 	switch tool {
 	case "cc":
 		if !launcher.DetectClaudeCode().Installed {
-			return errors.New("Claude Code is not installed; install it with: npm install -g @anthropic-ai/claude-code")
+			return fmt.Errorf("Claude Code is not installed; install it with: %s (other methods: %s)",
+				launcher.ClaudeCodeInstallCommand(), launcher.ClaudeCodeInstallDocsURL)
 		}
 	case "co":
 		if !launcher.DetectCodex().Installed {
