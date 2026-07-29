@@ -34,10 +34,15 @@ gantry/
 │   │   ├── detection.go        # Tool installation detection (Claude Code, OpenCode)
 │   │   ├── headless.go         # Headless arg builders, OTEL clamping, RunHeadless spawner
 │   │   └── shell.go            # Shell mode: spawn user's shell with configured environment
+│   ├── jsonconf/               # Editing JSON config files owned by the user/tool
+│   │   ├── merge.go            # Object, MergeMissing, SetIfBlank, Clone, Equal (JSON-normalized)
+│   │   └── file.go             # ReadObject, atomic WriteObject, timestamped Backup
 │   ├── opencode/               # OpenCode integration
-│   │   └── opencode.go         # OpenCode config file management (~/.config/opencode/opencode.json)
+│   │   ├── opencode.go         # Config file IO, JSONC comment stripping, conditional write paths
+│   │   ├── build.go            # Pure builders: BuildLiteLLMConfig/BuildBedrockConfig/ResetGantryKeys
+│   │   └── models.go           # Model catalogs and default-model constants
 │   ├── powerline/              # claude-powerline integration
-│   │   └── powerline.go        # Update ~/.claude/settings.json with statusLine config
+│   │   └── powerline.go        # Merge statusLine into ~/.claude/settings.json, preserving other keys
 │   └── updater/                # Self-update functionality
 │       └── updater.go          # GitHub release checking, download, replace executable
 ├── Makefile                    # Build targets for all platforms
@@ -131,7 +136,13 @@ Two behaviors that look like bugs but are not:
 - `--tool, -t <tool>` - Override defaultTool. Values: `cc`, `oc`, `ocd`
 - `--mode, -m <mode>` - Override mode. Values: `bedrock`, `litellm`
 - `--shell, -s` - Launch a configured shell instead of the AI tool. All normal setup is performed; the user runs commands manually
-- `--resetconfig, -r` - Reset the selected tool's configuration file to defaults. Creates a timestamped `.gantrybackup` before resetting
+- `--resetconfig, -r` - Reset the selected tool's configuration to defaults. Always creates a
+  timestamped `.gantrybackup` first. The scope differs by tool: for OpenCode it resets only the
+  keys GANTRY owns (`provider.gantry-litellm`, `provider.gantry-bedrock`, top-level `model`) and
+  leaves the user's MCP servers, agents, themes and keybinds in place; for Claude Code it deletes
+  `~/.claude/settings.json` outright, since those are Claude Code's own settings and it regenerates
+  them. To clear only GANTRY's Claude Code footprint, set `enablePowerline: false` instead - that
+  removes just the `statusLine` key
 
 ## Environment Variables
 
@@ -160,13 +171,91 @@ GANTRY sets the following environment variables for Claude Code:
 
 When using OpenCode (oc or ocd), GANTRY:
 1. Detects if OpenCode is installed
-2. Creates a timestamped backup of existing `~/.config/opencode/opencode.json`
+2. Computes what `~/.config/opencode/opencode.json` should contain and **writes only if
+   that differs from what is already there**. A write is preceded by a timestamped
+   `.gantrybackup`; an unchanged config produces no write and no backup
 3. Configures the provider in the OpenCode config:
-   - LiteLLM mode: Adds `gantry-litellm` provider with baseURL and apiKey
-   - Bedrock mode: Adds `gantry-bedrock` provider with region and profile
+   - LiteLLM mode: `gantry-litellm` provider with baseURL, apiKey and the model catalog
+   - Bedrock mode: `gantry-bedrock` provider with region, profile and the model catalog
 4. Launches the OpenCode tool
 
 Note: OTEL telemetry and powerline are Claude Code features and are not configured for OpenCode.
+
+### opencode.json belongs to the user, not to GANTRY
+
+`opencode.json` holds MCP servers, agent/mode blocks, themes, keybinds and permissions that
+GANTRY knows nothing about. Everything in `internal/opencode` therefore edits it as a generic
+`map[string]interface{}` via `internal/jsonconf` and merges key by key. Do **not** reintroduce a
+struct for this file, and do not assign a whole nested object - both silently delete the keys you
+did not name. `internal/config` deliberately has no `ClaudeSettings`-style type for the same
+reason.
+
+The merge policy lives in `internal/opencode/build.go`:
+
+| Key | Policy |
+|-----|--------|
+| `provider.gantry-*.npm` | GANTRY wins - the adapter determines the request shape |
+| `provider.gantry-*.options.*` | GANTRY wins - credentials come from `~/.gantryrc.json` and rotate |
+| `provider.gantry-*.name` | fill only (display label) |
+| `provider.gantry-*.models.*` | fill only, recursively, never deleting |
+| `provider.amazon-bedrock.options` | fill only, and only if the user already has the block - GANTRY does not own this provider ID |
+| top-level `model` | written only when absent or blank |
+| everything else | untouched |
+
+A user's edit inside a GANTRY-managed model entry wins; `--resetconfig` is the way back to
+defaults. The builders (`BuildLiteLLMConfig`, `BuildBedrockConfig`, `ResetGantryKeys`) are pure and
+return an error rather than overwriting a non-object the user put in GANTRY's path.
+
+Two things that look like they could be simplified but cannot:
+
+- **`jsonconf.Equal` round-trips through JSON instead of calling `reflect.DeepEqual`.** A config
+  read from disk holds every number as `float64`; one built from Go literals holds `int`. A direct
+  comparison would call those different forever, so GANTRY would rewrite the config and leave a new
+  `.gantrybackup` on every launch. `TestBuildLiteLLMConfigIsFixedPointAcrossJSONRoundTrip` guards
+  this, and the round trip in it is essential - a same-process idempotency check passes even with
+  the bug present.
+- **`stripJSONComments` scans rather than pattern-matching.** A `//.*$` regex truncates every URL
+  in the file, and GANTRY writes `baseURL` into it, so any `.jsonc` config became invalid JSON and
+  the launch failed outright.
+
+### Model catalog
+
+`internal/opencode/models.go` holds both catalogs. The LiteLLM keys are the **gateway's own
+aliases**, not Claude API model IDs - which is why a bare `claude-opus-4-6` sits next to a
+fully-qualified `claude-haiku-4-5-20251001-v1:0`. Confirm any new key with `gantry models` before
+adding it.
+
+`gantry-litellm` pins `npm: "@ai-sdk/openai-compatible"`, so every model on it - Anthropic ones
+included - travels OpenCode's OpenAI transform, where the reasoning control is `reasoningEffort`.
+Entries therefore carry `reasoning: true`, an always-applied `options.reasoningEffort`, and
+`variants` for `none`/`low`/`medium`/`high`/`xhigh`. Anthropic's `max` effort is deliberately
+absent: it has no representation in that request shape. `gantry-bedrock` entries carry `name` and
+`reasoning` only, because that provider does not use the OpenAI adapter (Bedrock takes
+`reasoningConfig.budgetTokens`).
+
+Keep catalog values to strings, bools and floats. An `int` literal would come back from disk as a
+`float64`; `jsonconf.Equal` absorbs that, but `TestCatalogsContainNoIntegerLiterals` keeps the
+defence out of the hot path.
+
+There is no `provider/model/variant` syntax for the top-level `model` key - OpenCode splits it on
+the first slash only, and variants are switched interactively via `/models` or the `variant_cycle`
+keybind. A default effort has to be expressed as the model entry's `options`.
+
+Verified against OpenCode 1.18.4: it **validates the `variants` shape** but **not the
+`reasoningEffort` value**. A non-object `variants` is rejected at config load
+(`Expected object | undefined, got ...`) and the model disappears from `opencode models`, while
+`"reasoningEffort": "totally-bogus"` loads without complaint and is passed through to the gateway.
+So an unsupported effort fails at the LiteLLM gateway, not at config load - which is why the variant
+set is kept to values the gateway is known to accept, and why adding `max` back is a one-line change
+gated only on gateway support.
+
+To check a generated config against the real OpenCode without touching your own files, point a
+throwaway `HOME` at it - `HOME=$tmp opencode models | grep gantry-` lists what OpenCode actually
+accepted. This is the only way to validate the config's schema; the Go tests cannot.
+
+`DefaultBedrockModel` deliberately lags `DefaultLiteLLMModel`: the Opus 5 cross-region inference
+profile ID is unconfirmed, and a wrong default is sticky because the top-level `model` is only
+written when absent.
 
 ## Headless Mode (`gantry exec`)
 
@@ -285,7 +374,21 @@ make test-coverage  # Generates coverage.html
 Conventions: table-driven subtests, standard library `testing` only (the sole dependency is
 `spf13/cobra`), and tests live in the same package as the code so unexported helpers are testable
 directly. Prefer extracting a pure builder that returns a value over asserting on side effects -
-`powerline.BuildPowerlineCommand` and `launcher.BuildHeadlessArgs` are the models to follow.
+`powerline.BuildPowerlineCommand`, `launcher.BuildHeadlessArgs` and `opencode.BuildLiteLLMConfig`
+are the models to follow.
+
+`internal/opencode` and `internal/powerline` each have a package-level `userHomeDir` seam that
+write-path tests reassign to a `t.TempDir()` (see the `fakeHome` helper in their `write_test.go`).
+Use it rather than `t.Setenv("HOME", ...)`, which does not work on Windows.
+
+Four tests encode reported bugs and should not be weakened:
+
+| Test | Guards against |
+|------|----------------|
+| `opencode.TestBuildLiteLLMConfigIsFixedPointAcrossJSONRoundTrip` | GANTRY rewriting the config and leaving a `.gantrybackup` on every launch. The JSON round trip is the point - remove it and the test passes with the bug present |
+| `opencode.TestConfigureLiteLLMBacksUpOnlyWhenItWrites` | The same thing end-to-end: run twice, expect exactly one backup |
+| `powerline.TestUpdatePowerlineSettingsPreservesUnknownKeysOnDisk` | Enabling powerline wiping `permissions`, `env`, `hooks`, `model` and `mcpServers` out of `~/.claude/settings.json` |
+| `opencode.TestStripJSONComments` (the URL cases) | A `.jsonc` config being truncated at the first `https://` and failing to parse |
 
 ## Version
 

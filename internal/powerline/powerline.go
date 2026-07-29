@@ -1,20 +1,42 @@
 package powerline
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
+	"github.com/mattabdou/gantry/internal/jsonconf"
 )
+
+// ~/.claude/settings.json belongs to Claude Code and to the user. It holds
+// permissions, env, hooks, model, mcpServers and more, none of which GANTRY
+// knows about. Everything here therefore works on a generic map: an earlier
+// implementation unmarshalled the file into a one-field struct and marshalled it
+// back, which silently deleted every other key in it.
+//
+// statusLine is the one key GANTRY manages, so it is set rather than merged -
+// but the fields are set inside any existing statusLine object so that sibling
+// keys survive.
+
+// statusLineKey is the settings.json key GANTRY manages.
+const statusLineKey = "statusLine"
+
+// powerlineMarker identifies a statusLine command as one GANTRY installed.
+const powerlineMarker = "claude-powerline"
+
+// userHomeDir is a seam for tests, which need a writable home directory to
+// exercise the backup-and-write behaviour.
+var userHomeDir = os.UserHomeDir
 
 // CheckResult contains the result of checking for claude-powerline configuration
 type CheckResult struct {
-	Installed    bool
-	Settings     *config.ClaudeSettings
+	Installed bool
+	// StatusLine is the statusLine block found in settings.json, if any.
+	// Reading into a narrow struct is safe; only writing one back is
+	// destructive, which is why the write paths use maps.
+	StatusLine   *config.StatusLineConfig
 	SettingsPath string
 }
 
@@ -26,7 +48,7 @@ type UpdateResult struct {
 
 // GetClaudeSettingsPath returns the path to Claude Code's settings.json
 func GetClaudeSettingsPath() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := userHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
@@ -45,23 +67,19 @@ func CheckClaudePowerline() *CheckResult {
 		SettingsPath: settingsPath,
 	}
 
-	data, err := os.ReadFile(settingsPath)
+	settings, err := jsonconf.ReadObject(settingsPath)
 	if err != nil {
 		return result
 	}
 
-	var settings config.ClaudeSettings
-	if err := json.Unmarshal(data, &settings); err != nil {
+	statusType, _ := jsonconf.Lookup(settings, statusLineKey, "type").(string)
+	command, _ := jsonconf.Lookup(settings, statusLineKey, "command").(string)
+	if statusType == "" && command == "" {
 		return result
 	}
 
-	result.Settings = &settings
-
-	// Check if statusLine is configured with claude-powerline
-	if settings.StatusLine != nil &&
-		settings.StatusLine.Type == "command" &&
-		settings.StatusLine.Command != "" &&
-		strings.Contains(settings.StatusLine.Command, "claude-powerline") {
+	result.StatusLine = &config.StatusLineConfig{Type: statusType, Command: command}
+	if statusType == "command" && strings.Contains(command, powerlineMarker) {
 		result.Installed = true
 	}
 
@@ -70,9 +88,12 @@ func CheckClaudePowerline() *CheckResult {
 
 // BuildPowerlineCommand builds the claude-powerline command with theme and style options
 func BuildPowerlineCommand(powerlineConfig *config.PowerlineConfig) string {
-	theme := "dark"
-	style := "powerline"
+	theme, style := themeAndStyle(powerlineConfig)
+	return fmt.Sprintf("npx -y @owloops/claude-powerline@latest --theme=%s --style=%s", theme, style)
+}
 
+func themeAndStyle(powerlineConfig *config.PowerlineConfig) (theme, style string) {
+	theme, style = "dark", "powerline"
 	if powerlineConfig != nil {
 		if powerlineConfig.Theme != "" {
 			theme = powerlineConfig.Theme
@@ -81,8 +102,47 @@ func BuildPowerlineCommand(powerlineConfig *config.PowerlineConfig) string {
 			style = powerlineConfig.Style
 		}
 	}
+	return theme, style
+}
 
-	return fmt.Sprintf("npx -y @owloops/claude-powerline@latest --theme=%s --style=%s", theme, style)
+// BuildSettings returns the Claude Code settings that should be on disk with
+// powerline enabled. cur is not mutated.
+//
+// Every key other than statusLine is carried through untouched, including keys
+// GANTRY knows nothing about. Within statusLine, only type and command are set,
+// so any sibling key the user or a future Claude Code version added survives.
+//
+// It returns nil if statusLine exists but is not a JSON object, so the caller
+// can decline to overwrite it.
+func BuildSettings(cur map[string]interface{}, powerlineConfig *config.PowerlineConfig) map[string]interface{} {
+	out := jsonconf.Clone(cur)
+
+	statusLine := jsonconf.Object(out, statusLineKey)
+	if statusLine == nil {
+		return nil
+	}
+	statusLine["type"] = "command"
+	statusLine["command"] = BuildPowerlineCommand(powerlineConfig)
+
+	return out
+}
+
+// ClearStatusLine returns cur without its statusLine key, but only when that
+// statusLine is a claude-powerline command GANTRY manages. A statusLine the user
+// set up themselves is left in place. cur is not mutated.
+func ClearStatusLine(cur map[string]interface{}) (out map[string]interface{}, removed bool) {
+	out = jsonconf.Clone(cur)
+
+	if _, present := out[statusLineKey]; !present {
+		return out, false
+	}
+	command, _ := jsonconf.Lookup(out, statusLineKey, "command").(string)
+	if !strings.Contains(command, powerlineMarker) {
+		return out, false
+	}
+
+	delete(out, statusLineKey)
+	return out, true
 }
 
 // UpdatePowerlineSettings updates Claude Code settings.json with powerline configuration
@@ -92,62 +152,36 @@ func UpdatePowerlineSettings(powerlineConfig *config.PowerlineConfig) *UpdateRes
 		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to get settings path: %v", err)}
 	}
 
-	settingsDir := filepath.Dir(settingsPath)
-
-	// Ensure .claude directory exists
-	if err := os.MkdirAll(settingsDir, 0755); err != nil {
-		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to create directory: %v", err)}
-	}
-
-	// Load existing settings or create new
-	var settings config.ClaudeSettings
-
-	data, err := os.ReadFile(settingsPath)
-	if err == nil {
-		if err := json.Unmarshal(data, &settings); err != nil {
-			// If settings file is corrupted, start fresh but warn user
-			fmt.Fprintf(os.Stderr, "Warning: Could not parse %s, creating new settings\n", settingsPath)
-			settings = config.ClaudeSettings{}
+	current, err := jsonconf.ReadObject(settingsPath)
+	if err != nil {
+		// Refuse to write over a file we could not parse. Overwriting here would
+		// discard the user's permissions, hooks and env - the previous behaviour.
+		return &UpdateResult{
+			Updated: false,
+			Message: fmt.Sprintf("Could not parse %s (%v); leaving it unchanged. Fix the file to enable powerline.", settingsPath, err),
 		}
 	}
 
-	// Build the new command
-	newCommand := BuildPowerlineCommand(powerlineConfig)
+	desired := BuildSettings(current, powerlineConfig)
+	if desired == nil {
+		return &UpdateResult{
+			Updated: false,
+			Message: fmt.Sprintf("%q in %s is not a JSON object; leaving it unchanged", statusLineKey, settingsPath),
+		}
+	}
 
-	// Check if update is needed
-	if settings.StatusLine != nil &&
-		settings.StatusLine.Type == "command" &&
-		settings.StatusLine.Command == newCommand {
+	if jsonconf.Equal(desired, current) {
 		return &UpdateResult{Updated: false, Message: "Powerline settings already up to date"}
 	}
 
-	// Update settings
-	settings.StatusLine = &config.StatusLineConfig{
-		Type:    "command",
-		Command: newCommand,
+	if _, err := jsonconf.Backup(settingsPath); err != nil {
+		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to back up settings: %v", err)}
 	}
-
-	// Write back to file
-	output, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to marshal settings: %v", err)}
-	}
-
-	if err := os.WriteFile(settingsPath, output, 0644); err != nil {
+	if err := jsonconf.WriteObject(settingsPath, desired); err != nil {
 		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to write settings: %v", err)}
 	}
 
-	theme := "dark"
-	style := "powerline"
-	if powerlineConfig != nil {
-		if powerlineConfig.Theme != "" {
-			theme = powerlineConfig.Theme
-		}
-		if powerlineConfig.Style != "" {
-			style = powerlineConfig.Style
-		}
-	}
-
+	theme, style := themeAndStyle(powerlineConfig)
 	return &UpdateResult{
 		Updated: true,
 		Message: fmt.Sprintf("Updated powerline: theme=%s, style=%s", theme, style),
@@ -161,37 +195,28 @@ func RemovePowerlineSettings() *UpdateResult {
 		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to get settings path: %v", err)}
 	}
 
-	// Read existing settings
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		// If file doesn't exist, nothing to remove
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
 		return &UpdateResult{Updated: false, Message: "No settings file to update"}
 	}
 
-	var settings config.ClaudeSettings
-	if err := json.Unmarshal(data, &settings); err != nil {
+	current, err := jsonconf.ReadObject(settingsPath)
+	if err != nil {
 		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to parse settings: %v", err)}
 	}
 
-	// Check if statusLine exists and contains claude-powerline
-	if settings.StatusLine == nil {
+	if _, present := current[statusLineKey]; !present {
 		return &UpdateResult{Updated: false, Message: "Powerline not configured"}
 	}
 
-	if !strings.Contains(settings.StatusLine.Command, "claude-powerline") {
+	desired, removed := ClearStatusLine(current)
+	if !removed {
 		return &UpdateResult{Updated: false, Message: "Powerline not managed by GANTRY"}
 	}
 
-	// Remove statusLine configuration
-	settings.StatusLine = nil
-
-	// Write back to file
-	output, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to marshal settings: %v", err)}
+	if _, err := jsonconf.Backup(settingsPath); err != nil {
+		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to back up settings: %v", err)}
 	}
-
-	if err := os.WriteFile(settingsPath, output, 0644); err != nil {
+	if err := jsonconf.WriteObject(settingsPath, desired); err != nil {
 		return &UpdateResult{Updated: false, Message: fmt.Sprintf("Failed to write settings: %v", err)}
 	}
 
@@ -201,14 +226,18 @@ func RemovePowerlineSettings() *UpdateResult {
 	}
 }
 
-// ResetClaudeSettings backs up and removes ~/.claude/settings.json so Claude Code recreates it with defaults
+// ResetClaudeSettings backs up and removes ~/.claude/settings.json so Claude Code recreates it with defaults.
+//
+// Unlike GANTRY's OpenCode reset, this deletes the whole file: these are Claude
+// Code's own settings and it regenerates them, and the command sits behind an
+// explicit confirmation prompt. To clear only what GANTRY manages, set
+// enablePowerline to false instead, which removes just the statusLine key.
 func ResetClaudeSettings() (*UpdateResult, error) {
 	settingsPath, err := GetClaudeSettingsPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get settings path: %w", err)
 	}
 
-	// Check if file exists
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
 		return &UpdateResult{
 			Updated: false,
@@ -216,20 +245,11 @@ func ResetClaudeSettings() (*UpdateResult, error) {
 		}, nil
 	}
 
-	// Create backup
-	data, err := os.ReadFile(settingsPath)
+	backupPath, err := jsonconf.Backup(settingsPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read settings for backup: %w", err)
+		return nil, err
 	}
 
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	backupPath := fmt.Sprintf("%s.%s.gantrybackup", settingsPath, timestamp)
-
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		return nil, fmt.Errorf("failed to write backup: %w", err)
-	}
-
-	// Remove the settings file
 	if err := os.Remove(settingsPath); err != nil {
 		return nil, fmt.Errorf("failed to remove settings file: %w", err)
 	}

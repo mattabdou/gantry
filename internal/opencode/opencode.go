@@ -1,14 +1,12 @@
 package opencode
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"time"
 
 	"github.com/mattabdou/gantry/internal/config"
+	"github.com/mattabdou/gantry/internal/jsonconf"
 )
 
 const (
@@ -20,30 +18,21 @@ const (
 	ConfigFileNameC = "opencode.jsonc"
 )
 
-// ProviderOptions contains the options for a provider
-type ProviderOptions struct {
-	BaseURL  string            `json:"baseURL,omitempty"`
-	APIKey   string            `json:"apiKey,omitempty"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Region   string            `json:"region,omitempty"`
-	Profile  string            `json:"profile,omitempty"`
-	Endpoint string            `json:"endpoint,omitempty"`
-}
-
-// ProviderConfig contains configuration for a single provider
-type ProviderConfig struct {
-	NPM     string          `json:"npm,omitempty"`
-	Name    string          `json:"name,omitempty"`
-	Options ProviderOptions `json:"options,omitempty"`
-}
-
-// OpenCodeConfig represents the opencode.json configuration structure
-// We use a generic map to preserve unknown fields
+// OpenCodeConfig represents the opencode.json configuration structure.
+//
+// It is deliberately a generic map rather than a struct. The file belongs to the
+// user and to OpenCode, and holds keys GANTRY knows nothing about - MCP servers,
+// agents, themes, keybinds, permissions. Unmarshalling into a struct and
+// marshalling back would silently delete all of them.
 type OpenCodeConfig map[string]interface{}
+
+// userHomeDir is a seam for tests, which need a writable home directory to
+// exercise the backup-and-write behaviour.
+var userHomeDir = os.UserHomeDir
 
 // GetConfigDir returns the path to the OpenCode config directory
 func GetConfigDir() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := userHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
@@ -94,7 +83,8 @@ func ConfigExists() bool {
 	return false
 }
 
-// LoadConfig loads the OpenCode configuration
+// LoadConfig loads the OpenCode configuration, returning it alongside the path
+// it came from. A missing file yields an empty config and no error.
 func LoadConfig() (OpenCodeConfig, string, error) {
 	configPath, err := GetConfigPath()
 	if err != nil {
@@ -104,7 +94,7 @@ func LoadConfig() (OpenCodeConfig, string, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return empty config if file doesn't exist
+			// No config yet: an empty one is the correct starting point.
 			return make(OpenCodeConfig), configPath, nil
 		}
 		return nil, "", fmt.Errorf("failed to read OpenCode config: %w", err)
@@ -115,70 +105,110 @@ func LoadConfig() (OpenCodeConfig, string, error) {
 		data = stripJSONComments(data)
 	}
 
-	var cfg OpenCodeConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, "", fmt.Errorf("invalid JSON in OpenCode config: %w", err)
-	}
-
-	return cfg, configPath, nil
-}
-
-// stripJSONComments removes single-line and multi-line comments from JSON
-func stripJSONComments(data []byte) []byte {
-	// Remove single-line comments (// ...)
-	singleLine := regexp.MustCompile(`(?m)//.*$`)
-	data = singleLine.ReplaceAll(data, []byte{})
-
-	// Remove multi-line comments (/* ... */)
-	multiLine := regexp.MustCompile(`(?s)/\*.*?\*/`)
-	data = multiLine.ReplaceAll(data, []byte{})
-
-	return data
-}
-
-// SaveConfig saves the OpenCode configuration
-func SaveConfig(cfg OpenCodeConfig, configPath string) error {
-	// Ensure the config directory exists
-	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	cfg, err := jsonconf.UnmarshalObject(data)
 	if err != nil {
-		return fmt.Errorf("failed to marshal OpenCode config: %w", err)
+		return nil, "", fmt.Errorf("invalid JSON in OpenCode config %s: %w", configPath, err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	return OpenCodeConfig(cfg), configPath, nil
+}
+
+// stripJSONComments removes // and /* */ comments from JSONC.
+//
+// It scans rather than pattern-matching because comment markers occur inside
+// legitimate string values. A regex approach truncates every URL - and GANTRY
+// itself writes baseURL into this file - which turned any .jsonc config into
+// invalid JSON:
+//
+//	"baseURL": "https://llm.example.com"  ->  "baseURL": "https:
+//
+// Comments are replaced with a space rather than deleted so that a comment
+// between two tokens cannot join them together.
+func stripJSONComments(data []byte) []byte {
+	out := make([]byte, 0, len(data))
+
+	inString := false
+	for i := 0; i < len(data); i++ {
+		c := data[i]
+
+		if inString {
+			out = append(out, c)
+			switch c {
+			case '\\':
+				// Copy the escaped byte verbatim so \" does not end the string.
+				if i+1 < len(data) {
+					i++
+					out = append(out, data[i])
+				}
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		if c == '"' {
+			inString = true
+			out = append(out, c)
+			continue
+		}
+
+		if c == '/' && i+1 < len(data) {
+			switch data[i+1] {
+			case '/':
+				// Line comment: skip to the newline, keeping it so that line
+				// numbers in any subsequent parse error stay meaningful.
+				i += 2
+				for i < len(data) && data[i] != '\n' {
+					i++
+				}
+				if i < len(data) {
+					out = append(out, '\n')
+				}
+				continue
+			case '*':
+				// Block comment: skip to the terminator. An unterminated block
+				// comment consumes the remainder, which json.Unmarshal will
+				// then report as a syntax error.
+				i += 2
+				for i+1 < len(data) && !(data[i] == '*' && data[i+1] == '/') {
+					i++
+				}
+				if i+1 < len(data) {
+					i++ // land on '/'; the loop's i++ steps past it
+				} else {
+					i = len(data)
+				}
+				out = append(out, ' ')
+				continue
+			}
+		}
+
+		out = append(out, c)
+	}
+
+	return out
+}
+
+// SaveConfig saves the OpenCode configuration.
+//
+// Writing a .jsonc file drops the user's comments, since the config is
+// round-tripped as plain JSON. Callers only write when the configuration has
+// actually changed, so this is rare, but it is warned about.
+func SaveConfig(cfg OpenCodeConfig, configPath string) error {
+	if filepath.Ext(configPath) == ".jsonc" {
+		fmt.Fprintf(os.Stderr, "Warning: rewriting %s as plain JSON; comments in that file will be lost.\n",
+			filepath.Base(configPath))
+	}
+	if err := jsonconf.WriteObject(configPath, cfg); err != nil {
 		return fmt.Errorf("failed to write OpenCode config: %w", err)
 	}
-
 	return nil
 }
 
-// BackupConfig creates a timestamped backup of the OpenCode config
+// BackupConfig creates a timestamped backup of the OpenCode config. A missing
+// file is not an error and yields an empty path.
 func BackupConfig(configPath string) (string, error) {
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// Nothing to backup
-		return "", nil
-	}
-
-	// Read the original file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read config for backup: %w", err)
-	}
-
-	// Create backup filename with timestamp
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	backupPath := fmt.Sprintf("%s.%s.gantrybackup", configPath, timestamp)
-
-	// Write the backup
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		return "", fmt.Errorf("failed to write backup: %w", err)
-	}
-
-	return backupPath, nil
+	return jsonconf.Backup(configPath)
 }
 
 // ConfigureResult contains the result of configuring OpenCode
@@ -189,292 +219,125 @@ type ConfigureResult struct {
 	Message    string
 }
 
-// ConfigureLiteLLM configures OpenCode for LiteLLM provider
+// buildFunc produces the configuration that should be on disk from the
+// configuration that currently is.
+type buildFunc func(OpenCodeConfig) (OpenCodeConfig, error)
+
+// apply loads the OpenCode config, runs build over it, and writes the result
+// only when it differs from what is already on disk.
+//
+// Writing conditionally is what keeps GANTRY out of the user's way. The earlier
+// implementation decided whether to update by counting models, so a user who
+// added one of their own made that check fire on every launch - rewriting the
+// config and leaving another .gantrybackup file behind each time. Comparing the
+// built config to the current one has no such coupling: no semantic change means
+// no write, and no write means no backup.
+func apply(build buildFunc, label string) (*ConfigureResult, error) {
+	current, configPath, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	desired, err := build(current)
+	if err != nil {
+		return nil, err
+	}
+
+	if jsonconf.Equal(desired, current) {
+		return &ConfigureResult{
+			Updated:    false,
+			ConfigPath: configPath,
+			Message:    label + " is up to date",
+		}, nil
+	}
+
+	backupPath, err := BackupConfig(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create backup: %w", err)
+	}
+
+	if err := SaveConfig(desired, configPath); err != nil {
+		return nil, err
+	}
+
+	result := &ConfigureResult{
+		Updated:    true,
+		BackupPath: backupPath,
+		ConfigPath: configPath,
+		Message:    label + " updated",
+	}
+	if backupPath != "" {
+		result.Message = fmt.Sprintf("%s updated (backup: %s)", label, filepath.Base(backupPath))
+	}
+	return result, nil
+}
+
+// ConfigureLiteLLM points OpenCode at the LiteLLM gateway, merging into the
+// user's existing configuration rather than replacing it.
 func ConfigureLiteLLM(litellmConfig *config.LiteLLMConfig) (*ConfigureResult, error) {
-	cfg, configPath, err := LoadConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if we need to update provider
-	needsUpdate := false
-	currentProvider := getProviderConfig(cfg, "gantry-litellm")
-
-	if currentProvider == nil {
-		needsUpdate = true
-	} else {
-		// Check if values have changed
-		if opts, ok := currentProvider["options"].(map[string]interface{}); ok {
-			if baseURL, _ := opts["baseURL"].(string); baseURL != litellmConfig.BaseURL {
-				needsUpdate = true
-			}
-			if apiKey, _ := opts["apiKey"].(string); apiKey != litellmConfig.AuthToken {
-				needsUpdate = true
-			}
-		} else {
-			needsUpdate = true
-		}
-		// Check if model list needs updating
-		if models, ok := currentProvider["models"].(map[string]interface{}); ok {
-			if len(models) != 6 {
-				needsUpdate = true
-			}
-		} else {
-			needsUpdate = true
-		}
-	}
-
-	if !needsUpdate {
-		return &ConfigureResult{
-			Updated:    false,
-			ConfigPath: configPath,
-			Message:    "OpenCode LiteLLM configuration is up to date",
-		}, nil
-	}
-
-	// Create backup before modifying
-	backupPath, err := BackupConfig(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create backup: %w", err)
-	}
-
-	// Ensure provider section exists
-	if cfg["provider"] == nil {
-		cfg["provider"] = make(map[string]interface{})
-	}
-
-	providers, ok := cfg["provider"].(map[string]interface{})
-	if !ok {
-		providers = make(map[string]interface{})
-		cfg["provider"] = providers
-	}
-
-	// Set up gantry-litellm provider with models defined inside
-	// The model keys are what get sent to the API, "name" is for display
-	providers["gantry-litellm"] = map[string]interface{}{
-		"npm":  "@ai-sdk/openai-compatible",
-		"name": "Gantry LiteLLM",
-		"options": map[string]interface{}{
-			"baseURL": litellmConfig.BaseURL,
-			"apiKey":  litellmConfig.AuthToken,
-		},
-		"models": map[string]interface{}{
-			"claude-opus-4-6": map[string]interface{}{
-				"name": "Claude Opus 4.6",
-			},
-			"claude-sonnet-4-6": map[string]interface{}{
-				"name": "Claude Sonnet 4.6",
-			},
-			"claude-haiku-4-5-20251001-v1:0": map[string]interface{}{
-				"name": "Claude Haiku 4.5",
-			},
-			"gpt-5.6-sol": map[string]interface{}{
-				"name": "GPT 5.6 Sol",
-			},
-			"gpt-5.6-terra": map[string]interface{}{
-				"name": "GPT 5.6 Terra",
-			},
-			"gpt-5.6-luna": map[string]interface{}{
-				"name": "GPT 5.6 Luna",
-			},
-		},
-	}
-
-	// Set default model to use gantry-litellm provider with Opus 4.6
-	// Format is "provider/model"
-	cfg["model"] = "gantry-litellm/claude-opus-4-6"
-
-	// Use opencode.json for new configs (not jsonc)
-	if !ConfigExists() {
-		configDir, _ := GetConfigDir()
-		configPath = filepath.Join(configDir, ConfigFileName)
-	}
-
-	if err := SaveConfig(cfg, configPath); err != nil {
-		return nil, err
-	}
-
-	result := &ConfigureResult{
-		Updated:    true,
-		BackupPath: backupPath,
-		ConfigPath: configPath,
-		Message:    "OpenCode LiteLLM configuration updated",
-	}
-
-	if backupPath != "" {
-		result.Message = fmt.Sprintf("OpenCode LiteLLM configuration updated (backup: %s)", filepath.Base(backupPath))
-	}
-
-	return result, nil
+	return apply(func(current OpenCodeConfig) (OpenCodeConfig, error) {
+		return BuildLiteLLMConfig(current, litellmConfig)
+	}, "OpenCode LiteLLM configuration")
 }
 
-// ConfigureBedrock configures OpenCode for AWS Bedrock provider
+// ConfigureBedrock points OpenCode at AWS Bedrock, merging into the user's
+// existing configuration rather than replacing it.
 func ConfigureBedrock(bedrockConfig *config.BedrockConfig) (*ConfigureResult, error) {
-	cfg, configPath, err := LoadConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if we need to update provider
-	needsUpdate := false
-	currentProvider := getProviderConfig(cfg, "gantry-bedrock")
-
-	if currentProvider == nil {
-		needsUpdate = true
-	} else {
-		// Check if values have changed
-		if opts, ok := currentProvider["options"].(map[string]interface{}); ok {
-			if region, _ := opts["region"].(string); region != bedrockConfig.AWSRegion {
-				needsUpdate = true
-			}
-			if profile, _ := opts["profile"].(string); profile != bedrockConfig.AWSProfile {
-				needsUpdate = true
-			}
-		} else {
-			needsUpdate = true
-		}
-	}
-
-	if !needsUpdate {
-		return &ConfigureResult{
-			Updated:    false,
-			ConfigPath: configPath,
-			Message:    "OpenCode Bedrock configuration is up to date",
-		}, nil
-	}
-
-	// Create backup before modifying
-	backupPath, err := BackupConfig(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create backup: %w", err)
-	}
-
-	// Ensure provider section exists
-	if cfg["provider"] == nil {
-		cfg["provider"] = make(map[string]interface{})
-	}
-
-	providers, ok := cfg["provider"].(map[string]interface{})
-	if !ok {
-		providers = make(map[string]interface{})
-		cfg["provider"] = providers
-	}
-
-	// Set up gantry-bedrock provider using amazon-bedrock format
-	bedrockOpts := map[string]interface{}{
-		"region":  bedrockConfig.AWSRegion,
-		"profile": bedrockConfig.AWSProfile,
-	}
-
-	providers["gantry-bedrock"] = map[string]interface{}{
-		"name":    "Gantry Bedrock",
-		"options": bedrockOpts,
-		"models": map[string]interface{}{
-			"us.anthropic.claude-opus-4-6-v1": map[string]interface{}{
-				"name": "Claude Opus 4.6",
-			},
-			"us.anthropic.claude-opus-4-5-20251101-v1:0": map[string]interface{}{
-				"name": "Claude Opus 4.5",
-			},
-			"us.anthropic.claude-sonnet-4-5-20250929-v1:0": map[string]interface{}{
-				"name": "Claude Sonnet 4.5",
-			},
-			"us.anthropic.claude-haiku-4-5-20251001-v1:0": map[string]interface{}{
-				"name": "Claude Haiku 4.5",
-			},
-		},
-	}
-
-	// Also configure the amazon-bedrock provider with gantry settings
-	providers["amazon-bedrock"] = map[string]interface{}{
-		"options": bedrockOpts,
-	}
-
-	// Set default model to use gantry-bedrock provider with Opus 4
-	// Format is "provider/model"
-	cfg["model"] = "gantry-bedrock/us.anthropic.claude-opus-4-6-v1"
-
-	// Use opencode.json for new configs (not jsonc)
-	if !ConfigExists() {
-		configDir, _ := GetConfigDir()
-		configPath = filepath.Join(configDir, ConfigFileName)
-	}
-
-	if err := SaveConfig(cfg, configPath); err != nil {
-		return nil, err
-	}
-
-	result := &ConfigureResult{
-		Updated:    true,
-		BackupPath: backupPath,
-		ConfigPath: configPath,
-		Message:    "OpenCode Bedrock configuration updated",
-	}
-
-	if backupPath != "" {
-		result.Message = fmt.Sprintf("OpenCode Bedrock configuration updated (backup: %s)", filepath.Base(backupPath))
-	}
-
-	return result, nil
+	return apply(func(current OpenCodeConfig) (OpenCodeConfig, error) {
+		return BuildBedrockConfig(current, bedrockConfig)
+	}, "OpenCode Bedrock configuration")
 }
 
-// ResetConfig resets the OpenCode config file to defaults by backing up and recreating it
+// ResetConfig restores GANTRY's own OpenCode settings to their defaults.
+//
+// Only the keys GANTRY owns are reset - its provider entries and the top-level
+// default model. The user's MCP servers, agents, themes, keybinds and
+// permissions are left alone, because that is not what "reset gantry's
+// configuration" means. A backup is taken unconditionally here, unlike the
+// Configure functions: the user asked for a reset and should get the safety net
+// whether or not anything ended up changing.
+//
+// The reset and the rebuild are composed in memory so that the whole operation
+// is a single backup and a single write.
 func ResetConfig(litellmConfig *config.LiteLLMConfig, bedrockConfig *config.BedrockConfig, mode string) (*ConfigureResult, error) {
-	configPath, err := GetConfigPath()
+	current, configPath, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// Create backup if file exists
-	var backupPath string
-	if _, err := os.Stat(configPath); err == nil {
-		backupPath, err = BackupConfig(configPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create backup: %w", err)
-		}
+	base := ResetGantryKeys(current)
 
-		// Remove existing config so Configure* creates a fresh one
-		if err := os.Remove(configPath); err != nil {
-			return nil, fmt.Errorf("failed to remove existing config: %w", err)
-		}
-	}
-
-	// Create fresh default config based on mode
-	var result *ConfigureResult
-	if mode == "litellm" && litellmConfig != nil {
-		result, err = ConfigureLiteLLM(litellmConfig)
-	} else if mode == "bedrock" && bedrockConfig != nil {
-		result, err = ConfigureBedrock(bedrockConfig)
-	} else {
+	var desired OpenCodeConfig
+	switch {
+	case mode == "litellm" && litellmConfig != nil:
+		desired, err = BuildLiteLLMConfig(base, litellmConfig)
+	case mode == "bedrock" && bedrockConfig != nil:
+		desired, err = BuildBedrockConfig(base, bedrockConfig)
+	default:
 		return nil, fmt.Errorf("no provider config available for mode %q", mode)
 	}
-
 	if err != nil {
 		return nil, err
 	}
 
-	result.BackupPath = backupPath
-	if backupPath != "" {
-		result.Message = fmt.Sprintf("OpenCode configuration reset to defaults (backup: %s)", filepath.Base(backupPath))
-	} else {
-		result.Message = "OpenCode configuration created with defaults"
+	backupPath, err := BackupConfig(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create backup: %w", err)
 	}
 
+	if err := SaveConfig(desired, configPath); err != nil {
+		return nil, err
+	}
+
+	result := &ConfigureResult{
+		Updated:    true,
+		BackupPath: backupPath,
+		ConfigPath: configPath,
+		Message:    "OpenCode configuration created with defaults",
+	}
+	if backupPath != "" {
+		result.Message = fmt.Sprintf("GANTRY's OpenCode settings reset to defaults, other settings preserved (backup: %s)",
+			filepath.Base(backupPath))
+	}
 	return result, nil
 }
-
-// getProviderConfig gets a provider configuration from the config
-func getProviderConfig(cfg OpenCodeConfig, providerID string) map[string]interface{} {
-	providers, ok := cfg["provider"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	provider, ok := providers[providerID].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	return provider
-}
-

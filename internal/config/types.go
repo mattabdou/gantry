@@ -91,12 +91,14 @@ type ProjectConfigResult struct {
 	Directory string
 }
 
-// ClaudeSettings represents the ~/.claude/settings.json file structure
-type ClaudeSettings struct {
-	StatusLine *StatusLineConfig `json:"statusLine,omitempty"`
-}
-
-// StatusLineConfig represents the statusLine configuration in Claude settings
+// StatusLineConfig represents the statusLine configuration in Claude settings.
+//
+// There is deliberately no struct for settings.json as a whole. That file holds
+// keys GANTRY knows nothing about - permissions, env, hooks, model, mcpServers -
+// and unmarshalling it into a partial struct then marshalling it back deletes
+// every key the struct does not name. internal/powerline edits it as a generic
+// map through internal/jsonconf instead. This type is only used to report what
+// was read, never to write.
 type StatusLineConfig struct {
 	Type    string `json:"type,omitempty"`
 	Command string `json:"command,omitempty"`
