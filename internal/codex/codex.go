@@ -1,6 +1,8 @@
 package codex
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,42 +38,81 @@ func ConfigureProvider(model string, litellmConfig *config.LiteLLMConfig, otelCo
 		return nil, err
 	}
 
-	desiredContent := generateConfigContent(model, litellmConfig, otelConfig)
-
-	// Check if existing profile already matches
-	if existingData, err := os.ReadFile(profilePath); err == nil {
-		if string(existingData) == desiredContent {
-			return &ConfigureResult{
-				Updated:    false,
-				ConfigPath: profilePath,
-				Message:    "Codex gantry profile is already up to date",
-			}, nil
-		}
+	if litellmConfig == nil {
+		return nil, fmt.Errorf("no litellm configuration available")
 	}
-
-	// Ensure the config directory exists
-	configDir := filepath.Dir(profilePath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	bundled, err := readBundledCatalog()
+	if err != nil {
+		return nil, err
 	}
+	catalog, err := buildModelCatalog(bundled)
+	if err != nil {
+		return nil, err
+	}
+	catalogData, err := json.MarshalIndent(catalog, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode Codex model catalog: %w", err)
+	}
+	catalogData = append(catalogData, '\n')
+	catalogPath := filepath.Join(filepath.Dir(profilePath), catalogFilename)
+	desiredContent := generateConfigContent(model, catalogPath, litellmConfig, otelConfig)
 
-	if err := os.WriteFile(profilePath, []byte(desiredContent), 0644); err != nil {
+	// Write the catalog first so the profile never points at an absent file.
+	// Repair a missing/stale catalog even when the profile itself is unchanged.
+	catalogUpdated, err := writeIfChanged(catalogPath, catalogData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write Codex model catalog: %w", err)
+	}
+	profileUpdated, err := writeIfChanged(profilePath, []byte(desiredContent))
+	if err != nil {
 		return nil, fmt.Errorf("failed to write Codex profile: %w", err)
 	}
-
-	return &ConfigureResult{
-		Updated:    true,
-		ConfigPath: profilePath,
-		Message:    "Codex gantry profile updated",
-	}, nil
+	updated := catalogUpdated || profileUpdated
+	message := "Codex gantry profile and model catalog are already up to date"
+	if updated {
+		message = "Codex gantry profile and model catalog updated"
+	}
+	return &ConfigureResult{Updated: updated, ConfigPath: profilePath, Message: message}, nil
 }
 
-func generateConfigContent(model string, litellmConfig *config.LiteLLMConfig, otelConfig config.OTELConfig) string {
+// Atomic replacement keeps concurrent interactive/headless readers from seeing
+// a partial JSON catalog or TOML profile. Unchanged files keep their timestamps.
+func writeIfChanged(path string, data []byte) (bool, error) {
+	existing, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(existing, data) {
+		return false, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return false, err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".gantry-*")
+	if err != nil {
+		return false, err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func generateConfigContent(model, catalogPath string, litellmConfig *config.LiteLLMConfig, otelConfig config.OTELConfig) string {
 	var sb strings.Builder
 
 	sb.WriteString("# Gantry profile for Codex - LiteLLM gateway configuration\n")
 	sb.WriteString("# Launch with: codex --profile gantry\n")
 	sb.WriteString(fmt.Sprintf("model = %q\n", model))
+	sb.WriteString(fmt.Sprintf("model_catalog_json = %q\n", catalogPath))
 	sb.WriteString("model_provider = \"gantry-litellm\"\n")
 	sb.WriteString("model_reasoning_effort = \"medium\"\n")
 	sb.WriteString("\n")

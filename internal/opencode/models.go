@@ -58,6 +58,22 @@ func effortModel(displayName string) map[string]interface{} {
 	}
 }
 
+// GPT-6 tool calling with reasoning uses Responses. Override the adapter on
+// these models only; the provider's existing Anthropic models still use Chat
+// Completions. Astra cannot disable reasoning.
+func gpt6Model(displayName string, supportsNone bool) map[string]interface{} {
+	model := effortModel(displayName)
+	model["provider"] = map[string]interface{}{"npm": "@ai-sdk/openai"}
+	model["limit"] = map[string]interface{}{"context": float64(1050000), "output": float64(128000)}
+	model["modalities"] = map[string]interface{}{"input": []interface{}{"text", "image"}, "output": []interface{}{"text"}}
+	variants := model["variants"].(map[string]interface{})
+	if !supportsNone {
+		delete(variants, "none")
+	}
+	variants["max"] = map[string]interface{}{"reasoningEffort": "max"}
+	return model
+}
+
 // litellmModels returns the model catalog GANTRY publishes on the LiteLLM
 // provider. A fresh map is returned on every call so that callers merging it
 // into a user's config cannot alias shared state.
@@ -72,6 +88,9 @@ func litellmModels() map[string]interface{} {
 		"claude-opus-4-6":                effortModel("Claude Opus 4.6"),
 		"claude-sonnet-4-6":              effortModel("Claude Sonnet 4.6"),
 		"claude-haiku-4-5-20251001-v1:0": effortModel("Claude Haiku 4.5"),
+		"gpt-6-astra":                    gpt6Model("GPT 6 Astra", false),
+		"gpt-6-sol":                      gpt6Model("GPT 6 Sol", true),
+		"gpt-6-luna":                     gpt6Model("GPT 6 Luna", true),
 		"gpt-5.6-sol":                    effortModel("GPT 5.6 Sol"),
 		"gpt-5.6-terra":                  effortModel("GPT 5.6 Terra"),
 		"gpt-5.6-luna":                   effortModel("GPT 5.6 Luna"),

@@ -106,6 +106,32 @@ make build-all
 
 ## Setup
 
+### Codex and OpenCode model catalogs
+
+In LiteLLM mode, `gantry --tool co` configures Codex CLI's `gantry` profile and
+adds `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, and `gpt-5.6-terra` to its model
+picker. Use `/model` in Codex to switch models. This integration requires Codex
+CLI 0.156.0 or later with `codex debug models --bundled` support.
+
+Gantry writes `gantry.config.toml` and `gantry.models.json` under `CODEX_HOME`
+(normally `~/.codex`). The catalog uses the installed Codex client's native model
+metadata and coding instructions. If GPT-6 Sol or Luna is not yet bundled,
+Gantry uses the corresponding GPT-5.6 model's coding instructions with the new
+gateway alias and supported reasoning levels. Existing bundled models remain
+available. Gantry does not change the base Codex config or its custom catalog.
+The same setup runs for `gantry exec --tool co` and Codex shell mode.
+
+For OpenCode Terminal and Desktop (`--tool oc` / `--tool ocd`), the LiteLLM
+catalog includes all three GPT-6 models alongside the existing Claude and
+GPT-5.6 entries. The new GPT-6 entries use the Responses API for reasoning and
+tool calling; Astra supports low through max effort, while Sol and Luna also
+support none. Existing model selections and customizations are preserved.
+
+These catalogs use the gateway's exact model aliases. Your LiteLLM key must
+have access to each selected model; `gantry models` lists the aliases available
+to your key. New installations continue to default to GPT-5.6 Terra for Codex
+and Claude Opus 5 for OpenCode in LiteLLM mode.
+
 ### 1. Initialize gantry
 
 Run the init command to create the global configuration file:

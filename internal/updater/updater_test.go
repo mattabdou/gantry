@@ -104,6 +104,9 @@ func TestCompareVersions(t *testing.T) {
 		{"1.0.0-beta.99", "1.0.0", -1},
 
 		// Different base versions with prerelease
+		{"1.2.1", "1.2.2-beta-1", -1},
+		{"1.2.2-beta-1", "1.2.2", -1},
+		{"1.2.2-beta-1", "1.2.2-beta-1", 0},
 		{"1.0.0-beta.1", "1.0.1", -1},
 		{"1.0.1-beta.1", "1.0.0", 1},
 		{"2.0.0-beta.1", "1.9.9", 1},

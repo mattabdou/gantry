@@ -585,11 +585,16 @@ func TestResetThenBuildRestoresDefaults(t *testing.T) {
 func TestLiteLLMCatalogShape(t *testing.T) {
 	models := litellmModels()
 
-	if len(models) != 7 {
-		t.Errorf("catalog has %d models, want 7", len(models))
+	if len(models) != 10 {
+		t.Errorf("catalog has %d models, want 10", len(models))
 	}
-	if _, present := models["claude-opus-5"]; !present {
-		t.Error("claude-opus-5 missing from the catalog")
+	for _, id := range []string{
+		"claude-opus-5", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001-v1:0",
+		"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+	} {
+		if _, present := models[id]; !present {
+			t.Errorf("%s missing from the catalog", id)
+		}
 	}
 
 	for key, entry := range models {
@@ -613,15 +618,28 @@ func TestLiteLLMCatalogShape(t *testing.T) {
 			t.Errorf("%s: variants is not an object", key)
 			continue
 		}
-		for _, want := range []string{"none", "low", "medium", "high", "xhigh"} {
+		efforts := []string{"none", "low", "medium", "high", "xhigh"}
+		isGPT6 := key == "gpt-6-astra" || key == "gpt-6-sol" || key == "gpt-6-luna"
+		if key == "gpt-6-astra" {
+			efforts = efforts[1:]
+			if _, present := variants["none"]; present {
+				t.Error("Astra cannot disable reasoning")
+			}
+		}
+		if isGPT6 {
+			efforts = append(efforts, "max")
+		}
+		for _, want := range efforts {
 			if got := jsonconf.Lookup(variants, want, "reasoningEffort"); got != want {
 				t.Errorf("%s: variants.%s.reasoningEffort = %v, want %q", key, want, got, want)
 			}
 		}
-		// "max" is Anthropic-API-only and has no representation in the
-		// OpenAI-compatible request shape these models travel through.
-		if _, present := variants["max"]; present {
-			t.Errorf("%s: variant \"max\" is not expressible via reasoningEffort", key)
+		if isGPT6 {
+			if jsonconf.Lookup(obj, "provider", "npm") != "@ai-sdk/openai" {
+				t.Errorf("%s must use Responses for tool calling", key)
+			}
+		} else if _, present := variants["max"]; present {
+			t.Errorf("%s: existing model's variants changed", key)
 		}
 	}
 }

@@ -225,11 +225,12 @@ aliases**, not Claude API model IDs - which is why a bare `claude-opus-4-6` sits
 fully-qualified `claude-haiku-4-5-20251001-v1:0`. Confirm any new key with `gantry models` before
 adding it.
 
-`gantry-litellm` pins `npm: "@ai-sdk/openai-compatible"`, so every model on it - Anthropic ones
-included - travels OpenCode's OpenAI transform, where the reasoning control is `reasoningEffort`.
-Entries therefore carry `reasoning: true`, an always-applied `options.reasoningEffort`, and
-`variants` for `none`/`low`/`medium`/`high`/`xhigh`. Anthropic's `max` effort is deliberately
-absent: it has no representation in that request shape. `gantry-bedrock` entries carry `name` and
+`gantry-litellm` pins `npm: "@ai-sdk/openai-compatible"` for its existing entries.
+The three GPT-6 entries override `provider.npm` with `@ai-sdk/openai` to use Responses:
+GPT-6 Sol/Luna cannot combine Chat Completions tool calling with reasoning. Their
+variants include `max`; Astra excludes `none`. Existing Claude/GPT-5.6 entries retain
+`none`/`low`/`medium`/`high`/`xhigh`. All have `reasoning: true` and an always-applied
+`options.reasoningEffort` of `medium`. `gantry-bedrock` entries carry `name` and
 `reasoning` only, because that provider does not use the OpenAI adapter (Bedrock takes
 `reasoningConfig.budgetTokens`).
 
@@ -256,6 +257,22 @@ accepted. This is the only way to validate the config's schema; the Go tests can
 `DefaultBedrockModel` deliberately lags `DefaultLiteLLMModel`: the Opus 5 cross-region inference
 profile ID is unconfirmed, and a wrong default is sticky because the top-level `model` is only
 written when absent.
+
+## Codex Integration
+
+`internal/codex` writes a dedicated `gantry.models.json` alongside `gantry.config.toml`
+under `CODEX_HOME` (or `~/.codex`). The profile references it using `model_catalog_json`.
+It requires Codex CLI 0.156.0+ with `codex debug models --bundled`; that local command
+supplies the native schema, coding prompts and tool definitions. Do not replace these
+with a handwritten generic prompt or copy a developer's personal model catalog.
+The builder keeps bundled models and makes Astra, GPT-6 Sol/Luna and GPT-5.6 Terra
+selectable through the API. Missing GPT-6 Sol/Luna entries use their matching GPT-5.6
+templates; when a client bundles the new models, its native definitions win.
+
+Both files are written atomically only when changed. The catalog is written first,
+and must be repaired even when the profile already matches. `readBundledCatalog` is
+the test seam; tests redirect `CODEX_HOME` to a temporary directory. Client/schema
+errors must leave the existing profile intact. The base user config is not edited.
 
 ## Headless Mode (`gantry exec`)
 
